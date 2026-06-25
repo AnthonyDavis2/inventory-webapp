@@ -16,5 +16,7 @@ export function centsToDollars(cents: number): number {
 
 /** Convert dollar number to integer cents: 12.99 → 1299 */
 export function dollarsToCents(dollars: number): number {
-  return Math.round(dollars * 100)
+  // Adding Number.EPSILON before multiplying compensates for IEEE 754 imprecision
+  // where values like 1.005 are stored as 1.00499999... and would otherwise round down.
+  return Math.round((dollars + Number.EPSILON) * 100)
 }
