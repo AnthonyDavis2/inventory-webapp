@@ -3,6 +3,7 @@ import { ConflictException, BadRequestException } from '@nestjs/common'
 import { OrganizationsService } from './organizations.service'
 import { PrismaService } from '../../core/database/prisma.service'
 import { AuthService } from '../../core/auth/auth.service'
+import { BillingService } from '../billing/billing.service'
 
 const mockOrg = {
   id: 'org-uuid',
@@ -47,16 +48,19 @@ describe('OrganizationsService', () => {
   let service: OrganizationsService
   let prisma: ReturnType<typeof buildMockPrisma>
   let auth: { createSession: jest.Mock }
+  let billing: { onRegister: jest.Mock }
 
   beforeEach(async () => {
     prisma = buildMockPrisma()
     auth = { createSession: jest.fn().mockResolvedValue({ accessToken: 'tok', refreshToken: 'rtok' }) }
+    billing = { onRegister: jest.fn().mockResolvedValue(undefined) }
 
     const module = await Test.createTestingModule({
       providers: [
         OrganizationsService,
         { provide: PrismaService, useValue: prisma },
         { provide: AuthService, useValue: auth },
+        { provide: BillingService, useValue: billing },
       ],
     }).compile()
 

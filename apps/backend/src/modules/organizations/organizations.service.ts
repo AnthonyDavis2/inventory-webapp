@@ -8,6 +8,7 @@ import * as bcrypt from 'bcrypt'
 import type { CostingMethod } from '@prisma/client'
 import { PrismaService } from '../../core/database/prisma.service'
 import { AuthService } from '../../core/auth/auth.service'
+import { BillingService } from '../billing/billing.service'
 import type { RegisterDto } from './dto/register.dto'
 import type { UpdateOrgDto } from './dto/update-org.dto'
 import type { OnboardingStepDto } from './dto/onboarding-step.dto'
@@ -19,6 +20,7 @@ export class OrganizationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auth: AuthService,
+    private readonly billing: BillingService,
   ) {}
 
   async register(
@@ -61,6 +63,9 @@ export class OrganizationsService {
 
       return { org, user }
     })
+
+    // Non-blocking: create Stripe customer + 14-day trial. Failures are logged, not thrown.
+    await this.billing.onRegister(result.org.id, result.org.email, result.org.name)
 
     const tokens = await this.auth.createSession(
       result.user.id,
