@@ -3,7 +3,7 @@ import { ValidationPipe, VersioningType } from '@nestjs/common'
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger'
 import { ConfigService } from '@nestjs/config'
 import helmet from 'helmet'
-import cookieParser from 'cookie-parser'
+import * as cookieParser from 'cookie-parser'
 import { Logger } from 'nestjs-pino'
 import { AppModule } from './app.module'
 
