@@ -128,6 +128,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Generate Nuxt types
+        run: pnpm --filter frontend exec nuxt prepare
+
       - run: pnpm --filter frontend test
 
   build:

@@ -1,12 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from './auth'
-
-vi.mock('#app', () => ({
-  useNuxtApp: () => ({ $fetch: vi.fn() }),
-  navigateTo: vi.fn(),
-  useRuntimeConfig: () => ({ public: { apiUrl: 'http://localhost:3001' } }),
-}))
 
 const mockUser = {
   id: 'user-1',
