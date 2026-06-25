@@ -22,7 +22,8 @@ export class StorageService {
     this.publicUrl = config.get('R2_PUBLIC_URL', 'http://localhost:9000')
 
     const accountId = config.get<string>('R2_ACCOUNT_ID', '')
-    const storageEnabled = Boolean(accountId) && accountId !== 'dev_placeholder'
+    // Real Cloudflare account IDs are 32-char hex strings; anything else is a placeholder
+    const storageEnabled = /^[a-f0-9]{32}$/i.test(accountId)
 
     if (storageEnabled) {
       this.client = new S3Client({
