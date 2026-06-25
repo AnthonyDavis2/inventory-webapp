@@ -1,6 +1,6 @@
 # Deployment Runbook
 
-Last updated: 2026-06-24
+Last updated: 2026-06-24 (rev 2)
 
 ---
 
@@ -17,8 +17,8 @@ Last updated: 2026-06-24
 ## Local Development Setup
 
 ### Prerequisites
-- Node.js 20+
-- pnpm 9+
+- Node.js 24+ (CI uses Node 24; local dev should match)
+- pnpm 11.9.0+ (`packageManager` field in root `package.json` pins this)
 - Docker Desktop
 
 ### First-time setup
