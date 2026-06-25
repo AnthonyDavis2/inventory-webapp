@@ -13,17 +13,23 @@ export interface SendEmailOptions {
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name)
-  private readonly client: Resend
+  private readonly client: Resend | null
   private readonly from: string
 
   constructor(private readonly config: ConfigService) {
-    this.client = new Resend(config.getOrThrow('RESEND_API_KEY'))
+    const resendKey = config.get<string>('RESEND_API_KEY', '')
+    this.client = resendKey.startsWith('re_') ? new Resend(resendKey) : null
+    if (!this.client) this.logger.warn('Resend not configured — emails will be logged only (dev mode)')
     const name = config.get('RESEND_FROM_NAME', 'Business Ops Platform')
-    const email = config.getOrThrow('RESEND_FROM_EMAIL')
+    const email = config.get('RESEND_FROM_EMAIL', 'noreply@localhost')
     this.from = `${name} <${email}>`
   }
 
   async send(options: SendEmailOptions): Promise<string | null> {
+    if (!this.client) {
+      this.logger.log(`[DEV EMAIL] To: ${options.to} | Subject: ${options.subject}`)
+      return null
+    }
     try {
       const { data, error } = await this.client.emails.send({
         from: this.from,

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, Logger, BadRequestException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import {
   S3Client,
@@ -12,22 +12,31 @@ import { randomUUID } from 'crypto'
 
 @Injectable()
 export class StorageService {
-  private readonly client: S3Client
+  private readonly logger = new Logger(StorageService.name)
+  private readonly client: S3Client | null
   private readonly bucket: string
   private readonly publicUrl: string
 
   constructor(private readonly config: ConfigService) {
-    this.bucket = config.getOrThrow('R2_BUCKET_NAME')
-    this.publicUrl = config.getOrThrow('R2_PUBLIC_URL')
+    this.bucket = config.get('R2_BUCKET_NAME', 'inventory-dev')
+    this.publicUrl = config.get('R2_PUBLIC_URL', 'http://localhost:9000')
 
-    this.client = new S3Client({
-      region: 'auto',
-      endpoint: `https://${config.getOrThrow('R2_ACCOUNT_ID')}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: config.getOrThrow('R2_ACCESS_KEY_ID'),
-        secretAccessKey: config.getOrThrow('R2_SECRET_ACCESS_KEY'),
-      },
-    })
+    const accountId = config.get<string>('R2_ACCOUNT_ID', '')
+    const storageEnabled = Boolean(accountId) && accountId !== 'dev_placeholder'
+
+    if (storageEnabled) {
+      this.client = new S3Client({
+        region: 'auto',
+        endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+        credentials: {
+          accessKeyId: config.getOrThrow('R2_ACCESS_KEY_ID'),
+          secretAccessKey: config.getOrThrow('R2_SECRET_ACCESS_KEY'),
+        },
+      })
+    } else {
+      this.client = null
+      this.logger.warn('R2 storage not configured — file uploads disabled (dev mode)')
+    }
   }
 
   async upload(
@@ -39,6 +48,7 @@ export class StorageService {
       contentType: string
     },
   ): Promise<{ key: string; url: string }> {
+    if (!this.client) throw new BadRequestException('File storage is not configured in this environment')
     const ext = options.filename.split('.').pop()
     const key = `${options.orgId}/${options.prefix}/${randomUUID()}.${ext}`
 
@@ -56,6 +66,7 @@ export class StorageService {
   }
 
   async getSignedDownloadUrl(key: string, expiresInSeconds = 3600): Promise<string> {
+    if (!this.client) throw new BadRequestException('File storage is not configured in this environment')
     return getSignedUrl(
       this.client,
       new GetObjectCommand({ Bucket: this.bucket, Key: key }),
@@ -68,6 +79,7 @@ export class StorageService {
     contentType: string,
     expiresInSeconds = 300,
   ): Promise<string> {
+    if (!this.client) throw new BadRequestException('File storage is not configured in this environment')
     return getSignedUrl(
       this.client,
       new PutObjectCommand({ Bucket: this.bucket, Key: key, ContentType: contentType }),
@@ -76,10 +88,12 @@ export class StorageService {
   }
 
   async delete(key: string): Promise<void> {
+    if (!this.client) return
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }))
   }
 
   async exists(key: string): Promise<boolean> {
+    if (!this.client) return false
     try {
       await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }))
       return true

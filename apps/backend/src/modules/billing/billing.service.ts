@@ -15,24 +15,44 @@ import type { CreateCheckoutDto } from './dto/create-checkout.dto'
 @Injectable()
 export class BillingService {
   private readonly logger = new Logger(BillingService.name)
-  private readonly stripe: Stripe
+  private readonly stripe: Stripe | null
   private readonly priceIds: Record<string, string>
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {
-    this.stripe = new Stripe(config.getOrThrow('STRIPE_SECRET_KEY'), {
-      apiVersion: '2024-06-20',
-    })
+    const stripeKey = config.get<string>('STRIPE_SECRET_KEY', '')
+    const stripeEnabled = stripeKey.startsWith('sk_test_') || stripeKey.startsWith('sk_live_')
+    this.stripe = stripeEnabled ? new Stripe(stripeKey, { apiVersion: '2024-06-20' }) : null
+    if (!stripeEnabled) this.logger.warn('Stripe not configured — billing features disabled (dev mode)')
+
     this.priceIds = {
-      STARTER: config.getOrThrow('STRIPE_STARTER_PRICE_ID'),
-      GROWTH: config.getOrThrow('STRIPE_GROWTH_PRICE_ID'),
-      BUSINESS: config.getOrThrow('STRIPE_BUSINESS_PRICE_ID'),
+      STARTER: config.get('STRIPE_STARTER_PRICE_ID', 'price_dev'),
+      GROWTH: config.get('STRIPE_GROWTH_PRICE_ID', 'price_dev'),
+      BUSINESS: config.get('STRIPE_BUSINESS_PRICE_ID', 'price_dev'),
     }
   }
 
   async onRegister(orgId: string, email: string, orgName: string): Promise<void> {
+    if (!this.stripe) {
+      // Dev mode: seed a local trial subscription without Stripe
+      const trialEnd = new Date(Date.now() + TRIAL_DAYS * 86_400_000)
+      await this.prisma.subscription.create({
+        data: {
+          org_id: orgId,
+          stripe_customer_id: `dev_${orgId}`,
+          stripe_subscription_id: `dev_sub_${orgId}`,
+          plan: 'STARTER',
+          status: 'TRIALING',
+          trial_ends_at: trialEnd,
+          current_period_start: new Date(),
+          current_period_end: trialEnd,
+        },
+      })
+      return
+    }
+
     try {
       const customer = await this.stripe.customers.create({
         email,
@@ -75,6 +95,7 @@ export class BillingService {
   }
 
   async createCheckoutSession(orgId: string, dto: CreateCheckoutDto): Promise<{ url: string }> {
+    if (!this.stripe) throw new BadRequestException('Stripe is not configured in this environment')
     const sub = await this.prisma.subscription.findUnique({ where: { org_id: orgId } })
     if (!sub) throw new NotFoundException('No subscription found')
 
@@ -98,6 +119,7 @@ export class BillingService {
   }
 
   async createPortalSession(orgId: string, returnUrl: string): Promise<{ url: string }> {
+    if (!this.stripe) throw new BadRequestException('Stripe is not configured in this environment')
     const sub = await this.prisma.subscription.findUnique({ where: { org_id: orgId } })
     if (!sub) throw new NotFoundException('No subscription found')
 
@@ -110,6 +132,7 @@ export class BillingService {
   }
 
   async handleWebhook(rawBody: Buffer, signature: string): Promise<void> {
+    if (!this.stripe) throw new BadRequestException('Stripe is not configured in this environment')
     const webhookSecret = this.config.getOrThrow('STRIPE_WEBHOOK_SECRET')
     let event: Stripe.Event
 
