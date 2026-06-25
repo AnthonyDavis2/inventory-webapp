@@ -35,5 +35,9 @@ export default defineNuxtConfig({
     },
   },
 
+  imports: {
+    dirs: ['shared/composables'],
+  },
+
   devtools: { enabled: process.env.NODE_ENV === 'development' },
 })
