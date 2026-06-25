@@ -14,8 +14,8 @@ dist/
 !.env.example
 !.env.*.example
 
-# Prisma
-apps/backend/prisma/migrations/
+# Prisma — migrations must be committed; only ignore local dev shadow db
+apps/backend/prisma/*.db
 
 # Logs
 *.log
