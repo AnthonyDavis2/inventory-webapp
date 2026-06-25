@@ -77,7 +77,7 @@ Build phases in this order — each phase unlocks the next:
 9. **Costing + Reporting** — standard costs, BOM cost builder, overhead, dashboards, reports
 10. **Platform support** — notifications, CSV imports, audit log viewer, expenses, accounting
 
-**Current status:** Pre-build. All design deliverables complete. Monorepo not yet scaffolded.
+**Current status:** Monorepo scaffold complete. `pnpm install` clean. Prisma client generated. TypeScript compiles with no errors. All 32 NestJS modules stubbed. All 20 frontend feature directories created. **Next: implement Phase 1 core infrastructure — config validation, DatabaseModule/PrismaService (done), AuthModule (JWT + refresh tokens + TOTP), TenantModule (middleware + RLS), AuditModule, QueueModule (BullMQ + Redis), StorageModule (R2), MailModule (Resend), PdfModule (Gotenberg), SearchModule (pg_trgm).**
 
 ---
 

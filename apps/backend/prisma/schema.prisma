@@ -1,0 +1,1964 @@
+// ============================================================
+// Business Operations Platform — Prisma Schema
+// Version: 1.0 (MVP)
+// Last updated: 2026-06-24
+//
+// Rules:
+//   - All monetary values: BIGINT (integer cents)
+//   - All IDs: UUID
+//   - All timestamps: TIMESTAMPTZ (UTC)
+//   - All business tables: include org_id
+//   - All business tables: soft delete (deleted_at)
+//   - All enums: defined as Prisma enums
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// PLATFORM — Organizations, Users, Auth, Billing
+// ============================================================
+
+model Organization {
+  id                  String    @id @default(uuid()) @db.Uuid
+  name                String
+  slug                String    @unique
+  email               String
+  phone               String?
+  website             String?
+  address_line1       String?
+  address_line2       String?
+  city                String?
+  state               String?   @db.Char(2)
+  zip                 String?
+  country             String    @default("US") @db.Char(2)
+  logo_url            String?
+  timezone            String    @default("America/New_York")
+  fiscal_year_start   Int       @default(1) // 1 = January
+  costing_method      CostingMethod?
+  costing_locked      Boolean   @default(false) // locked after first ledger entry
+  currency_code       String    @default("USD") @db.VarChar(3)
+  onboarding_step     Int       @default(0) // 0–7
+  onboarding_complete Boolean   @default(false)
+  is_read_only        Boolean   @default(false) // trial expired or payment failed
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+  deleted_at          DateTime? @db.Timestamptz
+
+  users               User[]
+  subscription        Subscription?
+  warehouses          Warehouse[]
+  uoms                UnitOfMeasure[]
+  uom_conversions     UOMConversion[]
+  product_categories  ProductCategory[]
+  products            Product[]
+  inventory_ledger    InventoryLedgerEntry[]
+  fifo_cost_layers    FifoCostLayer[]
+  wac_costs           WeightedAverageCost[]
+  lots                Lot[]
+  serial_numbers      SerialNumber[]
+  reorder_rules       ReorderRule[]
+  vendors             Vendor[]
+  purchase_orders     PurchaseOrder[]
+  customers           Customer[]
+  customer_groups     CustomerGroup[]
+  price_lists         PriceList[]
+  quotes              Quote[]
+  sales_orders        SalesOrder[]
+  invoices            Invoice[]
+  return_auths        ReturnAuthorization[]
+  boms                BillOfMaterials[]
+  work_orders         WorkOrder[]
+  overhead_rule       OverheadAllocationRule?
+  product_costs       ProductStandardCost[]
+  chart_of_accounts   ChartOfAccount[]
+  journal_entries     JournalEntry[]
+  expenses            Expense[]
+  expense_categories  ExpenseCategory[]
+  tax_settings        TaxSettings?
+  notifications       Notification[]
+  import_batches      ImportBatch[]
+  audit_logs          AuditLog[]
+
+  @@index([slug])
+  @@map("organizations")
+}
+
+model User {
+  id                  String    @id @default(uuid()) @db.Uuid
+  org_id              String    @db.Uuid
+  email               String
+  name                String
+  password_hash       String
+  role                UserRole
+  is_active           Boolean   @default(true)
+  mfa_enabled         Boolean   @default(false)
+  mfa_secret          String?   // encrypted at application layer
+  mfa_backup_codes    String[]  // encrypted
+  password_history    String[]  // last 5 bcrypt hashes
+  last_login_at       DateTime? @db.Timestamptz
+  invited_by          String?   @db.Uuid
+  invitation_token    String?
+  invitation_expires  DateTime? @db.Timestamptz
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+  deleted_at          DateTime? @db.Timestamptz
+
+  org                 Organization @relation(fields: [org_id], references: [id])
+  sessions            UserSession[]
+  notification_prefs  NotificationPreference[]
+
+  @@unique([org_id, email])
+  @@index([org_id])
+  @@index([email])
+  @@index([invitation_token])
+  @@map("users")
+}
+
+model UserSession {
+  id                  String    @id @default(uuid()) @db.Uuid
+  user_id             String    @db.Uuid
+  refresh_token_hash  String    @unique
+  ip_address          String?
+  user_agent          String?
+  expires_at          DateTime  @db.Timestamptz
+  revoked_at          DateTime? @db.Timestamptz
+  created_at          DateTime  @default(now()) @db.Timestamptz
+
+  user                User      @relation(fields: [user_id], references: [id])
+
+  @@index([user_id])
+  @@index([refresh_token_hash])
+  @@map("user_sessions")
+}
+
+model Subscription {
+  id                    String             @id @default(uuid()) @db.Uuid
+  org_id                String             @unique @db.Uuid
+  stripe_customer_id    String             @unique
+  stripe_subscription_id String?           @unique
+  plan                  SubscriptionPlan
+  status                SubscriptionStatus
+  trial_ends_at         DateTime?          @db.Timestamptz
+  current_period_start  DateTime?          @db.Timestamptz
+  current_period_end    DateTime?          @db.Timestamptz
+  cancel_at_period_end  Boolean            @default(false)
+  cancelled_at          DateTime?          @db.Timestamptz
+  created_at            DateTime           @default(now()) @db.Timestamptz
+  updated_at            DateTime           @updatedAt @db.Timestamptz
+
+  org                   Organization       @relation(fields: [org_id], references: [id])
+
+  @@index([stripe_customer_id])
+  @@index([stripe_subscription_id])
+  @@map("subscriptions")
+}
+
+// ============================================================
+// UNITS OF MEASURE
+// ============================================================
+
+model UnitOfMeasure {
+  id              String    @id @default(uuid()) @db.Uuid
+  org_id          String?   @db.Uuid  // null = global library entry
+  name            String
+  abbreviation    String
+  type            UOMType
+  is_global       Boolean   @default(false)
+  created_at      DateTime  @default(now()) @db.Timestamptz
+  updated_at      DateTime  @updatedAt @db.Timestamptz
+  deleted_at      DateTime? @db.Timestamptz
+
+  org             Organization?  @relation(fields: [org_id], references: [id])
+  conversions_from UOMConversion[] @relation("FromUOM")
+  conversions_to   UOMConversion[] @relation("ToUOM")
+  products_purchase Product[]     @relation("PurchaseUOM")
+  products_stocking Product[]     @relation("StockingUOM")
+  products_sales    Product[]     @relation("SalesUOM")
+  bom_lines         BOMLine[]
+
+  @@unique([org_id, abbreviation])
+  @@index([org_id])
+  @@map("units_of_measure")
+}
+
+model UOMConversion {
+  id                  String    @id @default(uuid()) @db.Uuid
+  org_id              String    @db.Uuid
+  from_uom_id         String    @db.Uuid
+  to_uom_id           String    @db.Uuid
+  conversion_factor   Decimal   @db.Decimal(18, 8)
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+
+  org                 Organization @relation(fields: [org_id], references: [id])
+  from_uom            UnitOfMeasure @relation("FromUOM", fields: [from_uom_id], references: [id])
+  to_uom              UnitOfMeasure @relation("ToUOM", fields: [to_uom_id], references: [id])
+
+  @@unique([org_id, from_uom_id, to_uom_id])
+  @@index([org_id])
+  @@map("uom_conversions")
+}
+
+// ============================================================
+// WAREHOUSES & LOCATIONS
+// ============================================================
+
+model Warehouse {
+  id              String    @id @default(uuid()) @db.Uuid
+  org_id          String    @db.Uuid
+  name            String
+  code            String
+  address_line1   String?
+  address_line2   String?
+  city            String?
+  state           String?   @db.Char(2)
+  zip             String?
+  is_default      Boolean   @default(false)
+  bins_enabled    Boolean   @default(false)
+  created_at      DateTime  @default(now()) @db.Timestamptz
+  updated_at      DateTime  @updatedAt @db.Timestamptz
+  created_by      String?   @db.Uuid
+  updated_by      String?   @db.Uuid
+  deleted_at      DateTime? @db.Timestamptz
+  deleted_by      String?   @db.Uuid
+
+  org             Organization @relation(fields: [org_id], references: [id])
+  bin_locations   BinLocation[]
+  ledger_entries  InventoryLedgerEntry[]
+  fifo_layers     FifoCostLayer[]
+  wac_costs       WeightedAverageCost[]
+  reorder_rules   ReorderRule[]
+
+  @@unique([org_id, code])
+  @@index([org_id])
+  @@map("warehouses")
+}
+
+model BinLocation {
+  id              String    @id @default(uuid()) @db.Uuid
+  org_id          String    @db.Uuid
+  warehouse_id    String    @db.Uuid
+  code            String    // e.g. A1-02-03
+  description     String?
+  is_active       Boolean   @default(true)
+  created_at      DateTime  @default(now()) @db.Timestamptz
+  updated_at      DateTime  @updatedAt @db.Timestamptz
+  deleted_at      DateTime? @db.Timestamptz
+
+  warehouse       Warehouse @relation(fields: [warehouse_id], references: [id])
+  ledger_entries  InventoryLedgerEntry[]
+
+  @@unique([warehouse_id, code])
+  @@index([org_id])
+  @@index([warehouse_id])
+  @@map("bin_locations")
+}
+
+// ============================================================
+// PRODUCTS & CATALOG
+// ============================================================
+
+model ProductCategory {
+  id              String    @id @default(uuid()) @db.Uuid
+  org_id          String    @db.Uuid
+  parent_id       String?   @db.Uuid
+  name            String
+  description     String?
+  created_at      DateTime  @default(now()) @db.Timestamptz
+  updated_at      DateTime  @updatedAt @db.Timestamptz
+  deleted_at      DateTime? @db.Timestamptz
+
+  org             Organization    @relation(fields: [org_id], references: [id])
+  parent          ProductCategory? @relation("CategoryTree", fields: [parent_id], references: [id])
+  children        ProductCategory[] @relation("CategoryTree")
+  products        Product[]
+
+  @@index([org_id])
+  @@index([parent_id])
+  @@map("product_categories")
+}
+
+model Product {
+  id                  String      @id @default(uuid()) @db.Uuid
+  org_id              String      @db.Uuid
+  sku                 String
+  name                String
+  description         String?
+  type                ProductType
+  category_id         String?     @db.Uuid
+  purchase_uom_id     String      @db.Uuid
+  stocking_uom_id     String      @db.Uuid
+  sales_uom_id        String      @db.Uuid
+  is_lot_tracked      Boolean     @default(false)
+  is_serial_tracked   Boolean     @default(false)
+  has_expiry          Boolean     @default(false)
+  expiry_alert_days   Int?        // days before expiry to alert
+  is_purchasable      Boolean     @default(true)
+  is_sellable         Boolean     @default(true)
+  is_manufactured     Boolean     @default(false)
+  notes               String?
+  currency_code       String      @default("USD") @db.VarChar(3)
+  created_at          DateTime    @default(now()) @db.Timestamptz
+  updated_at          DateTime    @updatedAt @db.Timestamptz
+  created_by          String?     @db.Uuid
+  updated_by          String?     @db.Uuid
+  deleted_at          DateTime?   @db.Timestamptz
+  deleted_by          String?     @db.Uuid
+
+  org                 Organization   @relation(fields: [org_id], references: [id])
+  category            ProductCategory? @relation(fields: [category_id], references: [id])
+  purchase_uom        UnitOfMeasure  @relation("PurchaseUOM", fields: [purchase_uom_id], references: [id])
+  stocking_uom        UnitOfMeasure  @relation("StockingUOM", fields: [stocking_uom_id], references: [id])
+  sales_uom           UnitOfMeasure  @relation("SalesUOM", fields: [sales_uom_id], references: [id])
+  variants            ProductVariant[]
+  barcodes            ProductBarcode[]
+  images              ProductImage[]
+  ledger_entries      InventoryLedgerEntry[]
+  fifo_layers         FifoCostLayer[]
+  wac_costs           WeightedAverageCost[]
+  lots                Lot[]
+  serial_numbers      SerialNumber[]
+  reorder_rules       ReorderRule[]
+  vendor_prices       VendorPriceListEntry[]
+  po_lines            PurchaseOrderLine[]
+  price_list_entries  PriceListEntry[]
+  quote_lines         QuoteLine[]
+  so_lines            SalesOrderLine[]
+  bom_finished_goods  BillOfMaterials[]
+  bom_components      BOMLine[]
+  bom_substitutes     BOMLine[]      @relation("SubstituteComponent")
+  wo_finished_goods   WorkOrder[]
+  standard_costs      ProductStandardCost[]
+
+  @@unique([org_id, sku])
+  @@index([org_id])
+  @@index([name])
+  @@index([org_id, type])
+  @@index([deleted_at])
+  @@map("products")
+}
+
+model ProductVariant {
+  id              String    @id @default(uuid()) @db.Uuid
+  org_id          String    @db.Uuid
+  product_id      String    @db.Uuid
+  sku             String
+  name            String
+  attributes      Json      // { "size": "L", "color": "Red" }
+  created_at      DateTime  @default(now()) @db.Timestamptz
+  updated_at      DateTime  @updatedAt @db.Timestamptz
+  deleted_at      DateTime? @db.Timestamptz
+
+  product         Product   @relation(fields: [product_id], references: [id])
+  barcodes        ProductBarcode[]
+
+  @@unique([org_id, sku])
+  @@index([product_id])
+  @@map("product_variants")
+}
+
+model ProductBarcode {
+  id              String      @id @default(uuid()) @db.Uuid
+  org_id          String      @db.Uuid
+  product_id      String      @db.Uuid
+  variant_id      String?     @db.Uuid
+  barcode         String
+  barcode_type    BarcodeType
+  is_primary      Boolean     @default(false)
+  created_at      DateTime    @default(now()) @db.Timestamptz
+
+  product         Product     @relation(fields: [product_id], references: [id])
+  variant         ProductVariant? @relation(fields: [variant_id], references: [id])
+
+  @@unique([org_id, barcode])
+  @@index([org_id])
+  @@index([barcode])
+  @@map("product_barcodes")
+}
+
+model ProductImage {
+  id              String    @id @default(uuid()) @db.Uuid
+  org_id          String    @db.Uuid
+  product_id      String    @db.Uuid
+  storage_key     String    // R2 object key
+  url             String    // pre-signed or CDN URL (refreshed)
+  sort_order      Int       @default(0)
+  is_primary      Boolean   @default(false)
+  created_at      DateTime  @default(now()) @db.Timestamptz
+
+  product         Product   @relation(fields: [product_id], references: [id])
+
+  @@index([product_id])
+  @@map("product_images")
+}
+
+// ============================================================
+// INVENTORY LEDGER (Source of Truth)
+// ============================================================
+
+model InventoryLedgerEntry {
+  id                  String        @id @default(uuid()) @db.Uuid
+  org_id              String        @db.Uuid
+  product_id          String        @db.Uuid
+  warehouse_id        String        @db.Uuid
+  bin_location_id     String?       @db.Uuid
+  lot_id              String?       @db.Uuid
+  serial_number_id    String?       @db.Uuid
+  movement_type       MovementType
+  quantity            Decimal       @db.Decimal(18, 4) // positive = in, negative = out
+  uom_id              String        @db.Uuid   // always stocking UOM
+  unit_cost_cents     BigInt        // cost per unit in cents
+  total_cost_cents    BigInt        // quantity × unit_cost_cents
+  currency_code       String        @default("USD") @db.VarChar(3)
+  reference_type      ReferenceType
+  reference_id        String        @db.Uuid
+  reversal_of_id      String?       @db.Uuid   // set on reversal entries
+  notes               String?
+  created_by          String        @db.Uuid
+  created_at          DateTime      @default(now()) @db.Timestamptz
+
+  org                 Organization     @relation(fields: [org_id], references: [id])
+  product             Product          @relation(fields: [product_id], references: [id])
+  warehouse           Warehouse        @relation(fields: [warehouse_id], references: [id])
+  bin_location        BinLocation?     @relation(fields: [bin_location_id], references: [id])
+  lot                 Lot?             @relation(fields: [lot_id], references: [id])
+  serial_number       SerialNumber?    @relation(fields: [serial_number_id], references: [id])
+  reversal_of         InventoryLedgerEntry? @relation("LedgerReversal", fields: [reversal_of_id], references: [id])
+  reversals           InventoryLedgerEntry[] @relation("LedgerReversal")
+
+  @@index([org_id])
+  @@index([org_id, product_id])
+  @@index([org_id, product_id, warehouse_id])
+  @@index([org_id, movement_type])
+  @@index([reference_type, reference_id])
+  @@index([lot_id])
+  @@index([created_at])
+  @@map("inventory_ledger_entries")
+}
+
+model FifoCostLayer {
+  id                  String    @id @default(uuid()) @db.Uuid
+  org_id              String    @db.Uuid
+  product_id          String    @db.Uuid
+  warehouse_id        String    @db.Uuid
+  receipt_id          String    @db.Uuid   // the receipt that created this layer
+  quantity_received   Decimal   @db.Decimal(18, 4)
+  quantity_remaining  Decimal   @db.Decimal(18, 4)
+  unit_cost_cents     BigInt
+  currency_code       String    @default("USD") @db.VarChar(3)
+  received_at         DateTime  @db.Timestamptz
+  fully_consumed_at   DateTime? @db.Timestamptz
+  created_at          DateTime  @default(now()) @db.Timestamptz
+
+  org                 Organization @relation(fields: [org_id], references: [id])
+  product             Product      @relation(fields: [product_id], references: [id])
+  warehouse           Warehouse    @relation(fields: [warehouse_id], references: [id])
+
+  @@index([org_id, product_id, warehouse_id, received_at]) // FIFO consumption order
+  @@index([org_id, product_id, warehouse_id, quantity_remaining])
+  @@map("fifo_cost_layers")
+}
+
+model WeightedAverageCost {
+  id                  String    @id @default(uuid()) @db.Uuid
+  org_id              String    @db.Uuid
+  product_id          String    @db.Uuid
+  warehouse_id        String    @db.Uuid
+  average_cost_cents  BigInt    // current weighted average unit cost
+  quantity_on_hand    Decimal   @db.Decimal(18, 4)
+  currency_code       String    @default("USD") @db.VarChar(3)
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+
+  org                 Organization @relation(fields: [org_id], references: [id])
+  product             Product      @relation(fields: [product_id], references: [id])
+  warehouse           Warehouse    @relation(fields: [warehouse_id], references: [id])
+
+  @@unique([org_id, product_id, warehouse_id])
+  @@index([org_id, product_id])
+  @@map("weighted_average_costs")
+}
+
+model Lot {
+  id              String    @id @default(uuid()) @db.Uuid
+  org_id          String    @db.Uuid
+  product_id      String    @db.Uuid
+  lot_number      String
+  batch_number    String?
+  expires_at      DateTime? @db.Timestamptz
+  manufactured_at DateTime? @db.Timestamptz
+  is_quarantine   Boolean   @default(false)
+  notes           String?
+  created_at      DateTime  @default(now()) @db.Timestamptz
+  updated_at      DateTime  @updatedAt @db.Timestamptz
+  deleted_at      DateTime? @db.Timestamptz
+
+  org             Organization           @relation(fields: [org_id], references: [id])
+  product         Product                @relation(fields: [product_id], references: [id])
+  ledger_entries  InventoryLedgerEntry[]
+  receipt_lines   ReceiptLine[]
+  shipment_lines  ShipmentLine[]
+
+  @@unique([org_id, product_id, lot_number])
+  @@index([org_id])
+  @@index([org_id, product_id])
+  @@index([expires_at])
+  @@map("lots")
+}
+
+model SerialNumber {
+  id              String              @id @default(uuid()) @db.Uuid
+  org_id          String              @db.Uuid
+  product_id      String              @db.Uuid
+  serial_number   String
+  status          SerialNumberStatus
+  lot_id          String?             @db.Uuid
+  created_at      DateTime            @default(now()) @db.Timestamptz
+  updated_at      DateTime            @updatedAt @db.Timestamptz
+  deleted_at      DateTime?           @db.Timestamptz
+
+  org             Organization           @relation(fields: [org_id], references: [id])
+  product         Product                @relation(fields: [product_id], references: [id])
+  ledger_entries  InventoryLedgerEntry[]
+
+  @@unique([org_id, product_id, serial_number])
+  @@index([org_id, product_id])
+  @@map("serial_numbers")
+}
+
+model ReorderRule {
+  id                  String    @id @default(uuid()) @db.Uuid
+  org_id              String    @db.Uuid
+  product_id          String    @db.Uuid
+  warehouse_id        String    @db.Uuid
+  reorder_point       Decimal   @db.Decimal(18, 4) // trigger when stock falls below this
+  reorder_quantity    Decimal   @db.Decimal(18, 4) // how much to order
+  safety_stock        Decimal   @db.Decimal(18, 4)
+  lead_time_days      Int
+  preferred_vendor_id String?   @db.Uuid
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+
+  org                 Organization @relation(fields: [org_id], references: [id])
+  product             Product      @relation(fields: [product_id], references: [id])
+  warehouse           Warehouse    @relation(fields: [warehouse_id], references: [id])
+
+  @@unique([org_id, product_id, warehouse_id])
+  @@index([org_id])
+  @@map("reorder_rules")
+}
+
+// ============================================================
+// VENDORS & PURCHASING
+// ============================================================
+
+model Vendor {
+  id                  String    @id @default(uuid()) @db.Uuid
+  org_id              String    @db.Uuid
+  name                String
+  code                String?
+  email               String?
+  phone               String?
+  address_line1       String?
+  address_line2       String?
+  city                String?
+  state               String?   @db.Char(2)
+  zip                 String?
+  tax_id              String?   // stored encrypted
+  payment_terms       PaymentTerms @default(NET30)
+  lead_time_days      Int       @default(7)
+  currency_code       String    @default("USD") @db.VarChar(3)
+  notes               String?
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+  created_by          String?   @db.Uuid
+  updated_by          String?   @db.Uuid
+  deleted_at          DateTime? @db.Timestamptz
+  deleted_by          String?   @db.Uuid
+
+  org                 Organization          @relation(fields: [org_id], references: [id])
+  contacts            VendorContact[]
+  price_list          VendorPriceListEntry[]
+  purchase_orders     PurchaseOrder[]
+
+  @@index([org_id])
+  @@index([name])
+  @@map("vendors")
+}
+
+model VendorContact {
+  id              String    @id @default(uuid()) @db.Uuid
+  vendor_id       String    @db.Uuid
+  name            String
+  role            String?
+  email           String?
+  phone           String?
+  is_primary      Boolean   @default(false)
+  created_at      DateTime  @default(now()) @db.Timestamptz
+  updated_at      DateTime  @updatedAt @db.Timestamptz
+  deleted_at      DateTime? @db.Timestamptz
+
+  vendor          Vendor    @relation(fields: [vendor_id], references: [id])
+
+  @@index([vendor_id])
+  @@map("vendor_contacts")
+}
+
+model VendorPriceListEntry {
+  id              String    @id @default(uuid()) @db.Uuid
+  org_id          String    @db.Uuid
+  vendor_id       String    @db.Uuid
+  product_id      String    @db.Uuid
+  unit_cost_cents BigInt
+  currency_code   String    @default("USD") @db.VarChar(3)
+  min_quantity    Decimal   @db.Decimal(18, 4) @default(1)
+  uom_id          String    @db.Uuid
+  effective_from  DateTime  @db.Timestamptz
+  effective_to    DateTime? @db.Timestamptz
+  created_at      DateTime  @default(now()) @db.Timestamptz
+  updated_at      DateTime  @updatedAt @db.Timestamptz
+
+  vendor          Vendor    @relation(fields: [vendor_id], references: [id])
+  product         Product   @relation(fields: [product_id], references: [id])
+
+  @@index([vendor_id, product_id])
+  @@index([org_id])
+  @@map("vendor_price_list_entries")
+}
+
+model PurchaseOrder {
+  id                  String      @id @default(uuid()) @db.Uuid
+  org_id              String      @db.Uuid
+  po_number           String      // org-scoped sequence e.g. PO-2024-00001
+  vendor_id           String      @db.Uuid
+  status              POStatus    @default(DRAFT)
+  currency_code       String      @default("USD") @db.VarChar(3)
+  subtotal_cents      BigInt      @default(0)
+  tax_cents           BigInt      @default(0)
+  total_cents         BigInt      @default(0)
+  payment_terms       PaymentTerms @default(NET30)
+  expected_date       DateTime?   @db.Timestamptz
+  notes               String?
+  internal_notes      String?
+  approved_by         String?     @db.Uuid
+  approved_at         DateTime?   @db.Timestamptz
+  sent_at             DateTime?   @db.Timestamptz
+  cancelled_at        DateTime?   @db.Timestamptz
+  cancelled_reason    String?
+  created_at          DateTime    @default(now()) @db.Timestamptz
+  updated_at          DateTime    @updatedAt @db.Timestamptz
+  created_by          String?     @db.Uuid
+  updated_by          String?     @db.Uuid
+  deleted_at          DateTime?   @db.Timestamptz
+  deleted_by          String?     @db.Uuid
+
+  org                 Organization @relation(fields: [org_id], references: [id])
+  vendor              Vendor       @relation(fields: [vendor_id], references: [id])
+  lines               PurchaseOrderLine[]
+  receipts            Receipt[]
+
+  @@unique([org_id, po_number])
+  @@index([org_id])
+  @@index([org_id, status])
+  @@index([vendor_id])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id                  String    @id @default(uuid()) @db.Uuid
+  org_id              String    @db.Uuid
+  po_id               String    @db.Uuid
+  product_id          String    @db.Uuid
+  quantity_ordered    Decimal   @db.Decimal(18, 4)
+  quantity_received   Decimal   @db.Decimal(18, 4) @default(0)
+  uom_id              String    @db.Uuid
+  unit_cost_cents     BigInt
+  currency_code       String    @default("USD") @db.VarChar(3)
+  total_cost_cents    BigInt
+  expected_date       DateTime? @db.Timestamptz
+  notes               String?
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+
+  po                  PurchaseOrder @relation(fields: [po_id], references: [id])
+  product             Product       @relation(fields: [product_id], references: [id])
+  receipt_lines       ReceiptLine[]
+
+  @@index([po_id])
+  @@index([org_id])
+  @@map("purchase_order_lines")
+}
+
+model Receipt {
+  id                  String    @id @default(uuid()) @db.Uuid
+  org_id              String    @db.Uuid
+  receipt_number      String
+  po_id               String    @db.Uuid
+  warehouse_id        String    @db.Uuid
+  received_at         DateTime  @db.Timestamptz
+  notes               String?
+  posted_at           DateTime? @db.Timestamptz // null = draft
+  posted_by           String?   @db.Uuid
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+  created_by          String?   @db.Uuid
+  deleted_at          DateTime? @db.Timestamptz
+
+  po                  PurchaseOrder @relation(fields: [po_id], references: [id])
+  lines               ReceiptLine[]
+  landed_costs        LandedCost[]
+
+  @@unique([org_id, receipt_number])
+  @@index([po_id])
+  @@index([org_id])
+  @@map("receipts")
+}
+
+model ReceiptLine {
+  id                  String    @id @default(uuid()) @db.Uuid
+  org_id              String    @db.Uuid
+  receipt_id          String    @db.Uuid
+  po_line_id          String    @db.Uuid
+  quantity_received   Decimal   @db.Decimal(18, 4)
+  uom_id              String    @db.Uuid
+  unit_cost_cents     BigInt
+  bin_location_id     String?   @db.Uuid
+  lot_id              String?   @db.Uuid
+  serial_number_ids   String[]  @db.Uuid // for serial-tracked items
+  created_at          DateTime  @default(now()) @db.Timestamptz
+
+  receipt             Receipt   @relation(fields: [receipt_id], references: [id])
+  po_line             PurchaseOrderLine @relation(fields: [po_line_id], references: [id])
+  lot                 Lot?      @relation(fields: [lot_id], references: [id])
+
+  @@index([receipt_id])
+  @@map("receipt_lines")
+}
+
+model LandedCost {
+  id                  String          @id @default(uuid()) @db.Uuid
+  org_id              String          @db.Uuid
+  receipt_id          String          @db.Uuid
+  type                LandedCostType
+  amount_cents        BigInt
+  currency_code       String          @default("USD") @db.VarChar(3)
+  description         String?
+  created_at          DateTime        @default(now()) @db.Timestamptz
+
+  receipt             Receipt         @relation(fields: [receipt_id], references: [id])
+
+  @@index([receipt_id])
+  @@map("landed_costs")
+}
+
+// ============================================================
+// CUSTOMERS & SALES
+// ============================================================
+
+model CustomerGroup {
+  id              String    @id @default(uuid()) @db.Uuid
+  org_id          String    @db.Uuid
+  name            String
+  description     String?
+  created_at      DateTime  @default(now()) @db.Timestamptz
+  updated_at      DateTime  @updatedAt @db.Timestamptz
+  deleted_at      DateTime? @db.Timestamptz
+
+  org             Organization @relation(fields: [org_id], references: [id])
+  customers       Customer[]
+
+  @@index([org_id])
+  @@map("customer_groups")
+}
+
+model Customer {
+  id                    String        @id @default(uuid()) @db.Uuid
+  org_id                String        @db.Uuid
+  name                  String
+  code                  String?
+  type                  CustomerType
+  group_id              String?       @db.Uuid
+  price_list_id         String?       @db.Uuid
+  payment_terms         PaymentTerms  @default(NET30)
+  credit_limit_cents    BigInt        @default(0)
+  currency_code         String        @default("USD") @db.VarChar(3)
+  tax_exempt            Boolean       @default(false)
+  tax_exempt_number     String?
+  tax_exempt_expires    DateTime?     @db.Timestamptz
+  notes                 String?
+  created_at            DateTime      @default(now()) @db.Timestamptz
+  updated_at            DateTime      @updatedAt @db.Timestamptz
+  created_by            String?       @db.Uuid
+  updated_by            String?       @db.Uuid
+  deleted_at            DateTime?     @db.Timestamptz
+  deleted_by            String?       @db.Uuid
+
+  org                   Organization  @relation(fields: [org_id], references: [id])
+  group                 CustomerGroup? @relation(fields: [group_id], references: [id])
+  price_list            PriceList?    @relation(fields: [price_list_id], references: [id])
+  contacts              CustomerContact[]
+  addresses             CustomerAddress[]
+  quotes                Quote[]
+  sales_orders          SalesOrder[]
+  invoices              Invoice[]
+  return_auths          ReturnAuthorization[]
+
+  @@index([org_id])
+  @@index([name])
+  @@map("customers")
+}
+
+model CustomerContact {
+  id              String    @id @default(uuid()) @db.Uuid
+  customer_id     String    @db.Uuid
+  name            String
+  role            String?
+  email           String?
+  phone           String?
+  is_primary      Boolean   @default(false)
+  created_at      DateTime  @default(now()) @db.Timestamptz
+  updated_at      DateTime  @updatedAt @db.Timestamptz
+  deleted_at      DateTime? @db.Timestamptz
+
+  customer        Customer  @relation(fields: [customer_id], references: [id])
+
+  @@index([customer_id])
+  @@map("customer_contacts")
+}
+
+model CustomerAddress {
+  id              String      @id @default(uuid()) @db.Uuid
+  customer_id     String      @db.Uuid
+  type            AddressType
+  line1           String
+  line2           String?
+  city            String
+  state           String      @db.Char(2)
+  zip             String
+  country         String      @default("US") @db.Char(2)
+  is_default      Boolean     @default(false)
+  created_at      DateTime    @default(now()) @db.Timestamptz
+  updated_at      DateTime    @updatedAt @db.Timestamptz
+  deleted_at      DateTime?   @db.Timestamptz
+
+  customer        Customer    @relation(fields: [customer_id], references: [id])
+
+  @@index([customer_id])
+  @@map("customer_addresses")
+}
+
+model PriceList {
+  id              String    @id @default(uuid()) @db.Uuid
+  org_id          String    @db.Uuid
+  name            String
+  description     String?
+  is_default      Boolean   @default(false)
+  currency_code   String    @default("USD") @db.VarChar(3)
+  min_margin_pct  Decimal?  @db.Decimal(5, 2) // minimum gross margin %, null = no floor
+  created_at      DateTime  @default(now()) @db.Timestamptz
+  updated_at      DateTime  @updatedAt @db.Timestamptz
+  deleted_at      DateTime? @db.Timestamptz
+
+  org             Organization       @relation(fields: [org_id], references: [id])
+  entries         PriceListEntry[]
+  customers       Customer[]
+
+  @@index([org_id])
+  @@map("price_lists")
+}
+
+model PriceListEntry {
+  id              String          @id @default(uuid()) @db.Uuid
+  org_id          String          @db.Uuid
+  price_list_id   String          @db.Uuid
+  product_id      String          @db.Uuid
+  rule_type       PriceRuleType
+  flat_price_cents BigInt?        // used when rule_type = FLAT
+  markup_factor   Decimal?        @db.Decimal(8, 4) // e.g. 1.40 = cost + 40%
+  discount_pct    Decimal?        @db.Decimal(5, 2) // e.g. 15.00 = 15% off list
+  currency_code   String          @default("USD") @db.VarChar(3)
+  created_at      DateTime        @default(now()) @db.Timestamptz
+  updated_at      DateTime        @updatedAt @db.Timestamptz
+
+  price_list      PriceList       @relation(fields: [price_list_id], references: [id])
+  product         Product         @relation(fields: [product_id], references: [id])
+
+  @@unique([price_list_id, product_id])
+  @@index([org_id])
+  @@map("price_list_entries")
+}
+
+model Quote {
+  id                  String      @id @default(uuid()) @db.Uuid
+  org_id              String      @db.Uuid
+  quote_number        String
+  customer_id         String      @db.Uuid
+  status              QuoteStatus @default(DRAFT)
+  currency_code       String      @default("USD") @db.VarChar(3)
+  subtotal_cents      BigInt      @default(0)
+  tax_cents           BigInt      @default(0)
+  total_cents         BigInt      @default(0)
+  expires_at          DateTime?   @db.Timestamptz
+  notes               String?
+  internal_notes      String?
+  converted_to_so_id  String?     @db.Uuid
+  sent_at             DateTime?   @db.Timestamptz
+  created_at          DateTime    @default(now()) @db.Timestamptz
+  updated_at          DateTime    @updatedAt @db.Timestamptz
+  created_by          String?     @db.Uuid
+  updated_by          String?     @db.Uuid
+  deleted_at          DateTime?   @db.Timestamptz
+  deleted_by          String?     @db.Uuid
+
+  org                 Organization @relation(fields: [org_id], references: [id])
+  customer            Customer     @relation(fields: [customer_id], references: [id])
+  lines               QuoteLine[]
+
+  @@unique([org_id, quote_number])
+  @@index([org_id])
+  @@index([customer_id])
+  @@map("quotes")
+}
+
+model QuoteLine {
+  id                  String    @id @default(uuid()) @db.Uuid
+  quote_id            String    @db.Uuid
+  product_id          String    @db.Uuid
+  description         String?
+  quantity            Decimal   @db.Decimal(18, 4)
+  uom_id              String    @db.Uuid
+  unit_price_cents    BigInt
+  discount_pct        Decimal   @db.Decimal(5, 2) @default(0)
+  tax_pct             Decimal   @db.Decimal(5, 2) @default(0)
+  tax_cents           BigInt    @default(0)
+  total_cents         BigInt
+  currency_code       String    @default("USD") @db.VarChar(3)
+  sort_order          Int       @default(0)
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+
+  quote               Quote     @relation(fields: [quote_id], references: [id])
+  product             Product   @relation(fields: [product_id], references: [id])
+
+  @@index([quote_id])
+  @@map("quote_lines")
+}
+
+model SalesOrder {
+  id                  String        @id @default(uuid()) @db.Uuid
+  org_id              String        @db.Uuid
+  order_number        String
+  customer_id         String        @db.Uuid
+  quote_id            String?       @db.Uuid
+  status              SOStatus      @default(DRAFT)
+  fulfillment_status  FulfillmentStatus @default(UNFULFILLED)
+  currency_code       String        @default("USD") @db.VarChar(3)
+  subtotal_cents      BigInt        @default(0)
+  discount_cents      BigInt        @default(0)
+  tax_cents           BigInt        @default(0)
+  shipping_cents      BigInt        @default(0)
+  total_cents         BigInt        @default(0)
+  payment_terms       PaymentTerms  @default(NET30)
+  ship_to_address_id  String?       @db.Uuid
+  requested_ship_date DateTime?     @db.Timestamptz
+  notes               String?
+  internal_notes      String?
+  confirmed_at        DateTime?     @db.Timestamptz
+  cancelled_at        DateTime?     @db.Timestamptz
+  cancelled_reason    String?
+  created_at          DateTime      @default(now()) @db.Timestamptz
+  updated_at          DateTime      @updatedAt @db.Timestamptz
+  created_by          String?       @db.Uuid
+  updated_by          String?       @db.Uuid
+  deleted_at          DateTime?     @db.Timestamptz
+  deleted_by          String?       @db.Uuid
+
+  org                 Organization  @relation(fields: [org_id], references: [id])
+  customer            Customer      @relation(fields: [customer_id], references: [id])
+  lines               SalesOrderLine[]
+  shipments           Shipment[]
+  invoices            Invoice[]
+  return_auths        ReturnAuthorization[]
+
+  @@unique([org_id, order_number])
+  @@index([org_id])
+  @@index([org_id, status])
+  @@index([customer_id])
+  @@map("sales_orders")
+}
+
+model SalesOrderLine {
+  id                    String              @id @default(uuid()) @db.Uuid
+  org_id                String              @db.Uuid
+  so_id                 String              @db.Uuid
+  product_id            String              @db.Uuid
+  description           String?
+  quantity_ordered      Decimal             @db.Decimal(18, 4)
+  quantity_fulfilled    Decimal             @db.Decimal(18, 4) @default(0)
+  uom_id                String              @db.Uuid
+  unit_price_cents      BigInt
+  discount_pct          Decimal             @db.Decimal(5, 2) @default(0)
+  tax_pct               Decimal             @db.Decimal(5, 2) @default(0)
+  tax_cents             BigInt              @default(0)
+  total_cents           BigInt
+  currency_code         String              @default("USD") @db.VarChar(3)
+  fulfillment_status    FulfillmentStatus   @default(UNFULFILLED)
+  sort_order            Int                 @default(0)
+  created_at            DateTime            @default(now()) @db.Timestamptz
+  updated_at            DateTime            @updatedAt @db.Timestamptz
+
+  so                    SalesOrder          @relation(fields: [so_id], references: [id])
+  product               Product             @relation(fields: [product_id], references: [id])
+  shipment_lines        ShipmentLine[]
+  invoice_lines         InvoiceLine[]
+  return_lines          ReturnLine[]
+
+  @@index([so_id])
+  @@index([org_id])
+  @@map("sales_order_lines")
+}
+
+model Shipment {
+  id                  String    @id @default(uuid()) @db.Uuid
+  org_id              String    @db.Uuid
+  shipment_number     String
+  so_id               String    @db.Uuid
+  warehouse_id        String    @db.Uuid
+  carrier             String?
+  tracking_number     String?
+  shipping_cost_cents BigInt    @default(0)
+  currency_code       String    @default("USD") @db.VarChar(3)
+  shipped_at          DateTime? @db.Timestamptz
+  notes               String?
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+  created_by          String?   @db.Uuid
+  deleted_at          DateTime? @db.Timestamptz
+
+  so                  SalesOrder @relation(fields: [so_id], references: [id])
+  lines               ShipmentLine[]
+
+  @@unique([org_id, shipment_number])
+  @@index([so_id])
+  @@index([org_id])
+  @@map("shipments")
+}
+
+model ShipmentLine {
+  id              String    @id @default(uuid()) @db.Uuid
+  shipment_id     String    @db.Uuid
+  so_line_id      String    @db.Uuid
+  quantity        Decimal   @db.Decimal(18, 4)
+  lot_id          String?   @db.Uuid
+  serial_number_id String?  @db.Uuid
+  bin_location_id String?   @db.Uuid
+  created_at      DateTime  @default(now()) @db.Timestamptz
+
+  shipment        Shipment      @relation(fields: [shipment_id], references: [id])
+  so_line         SalesOrderLine @relation(fields: [so_line_id], references: [id])
+  lot             Lot?          @relation(fields: [lot_id], references: [id])
+
+  @@index([shipment_id])
+  @@map("shipment_lines")
+}
+
+model Invoice {
+  id                    String          @id @default(uuid()) @db.Uuid
+  org_id                String          @db.Uuid
+  invoice_number        String
+  customer_id           String          @db.Uuid
+  so_id                 String?         @db.Uuid
+  status                InvoiceStatus   @default(DRAFT)
+  currency_code         String          @default("USD") @db.VarChar(3)
+  subtotal_cents        BigInt          @default(0)
+  discount_cents        BigInt          @default(0)
+  tax_cents             BigInt          @default(0)
+  shipping_cents        BigInt          @default(0)
+  total_cents           BigInt          @default(0)
+  amount_paid_cents     BigInt          @default(0)
+  amount_due_cents      BigInt          @default(0)
+  payment_terms         PaymentTerms    @default(NET30)
+  due_date              DateTime?       @db.Timestamptz
+  stripe_payment_link   String?
+  stripe_invoice_id     String?
+  sent_at               DateTime?       @db.Timestamptz
+  paid_at               DateTime?       @db.Timestamptz
+  voided_at             DateTime?       @db.Timestamptz
+  voided_reason         String?
+  notes                 String?
+  created_at            DateTime        @default(now()) @db.Timestamptz
+  updated_at            DateTime        @updatedAt @db.Timestamptz
+  created_by            String?         @db.Uuid
+  updated_by            String?         @db.Uuid
+  deleted_at            DateTime?       @db.Timestamptz
+  deleted_by            String?         @db.Uuid
+
+  org                   Organization    @relation(fields: [org_id], references: [id])
+  customer              Customer        @relation(fields: [customer_id], references: [id])
+  so                    SalesOrder?     @relation(fields: [so_id], references: [id])
+  lines                 InvoiceLine[]
+  payments              Payment[]
+  credit_memos          CreditMemo[]
+
+  @@unique([org_id, invoice_number])
+  @@index([org_id])
+  @@index([org_id, status])
+  @@index([customer_id])
+  @@index([due_date])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id                  String    @id @default(uuid()) @db.Uuid
+  invoice_id          String    @db.Uuid
+  so_line_id          String?   @db.Uuid
+  product_id          String?   @db.Uuid
+  description         String
+  quantity            Decimal   @db.Decimal(18, 4)
+  unit_price_cents    BigInt
+  discount_pct        Decimal   @db.Decimal(5, 2) @default(0)
+  tax_pct             Decimal   @db.Decimal(5, 2) @default(0)
+  tax_cents           BigInt    @default(0)
+  total_cents         BigInt
+  unit_cost_cents     BigInt    @default(0) // COGS at time of sale
+  currency_code       String    @default("USD") @db.VarChar(3)
+  sort_order          Int       @default(0)
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+
+  invoice             Invoice   @relation(fields: [invoice_id], references: [id])
+  so_line             SalesOrderLine? @relation(fields: [so_line_id], references: [id])
+
+  @@index([invoice_id])
+  @@map("invoice_lines")
+}
+
+model Payment {
+  id                  String        @id @default(uuid()) @db.Uuid
+  org_id              String        @db.Uuid
+  invoice_id          String        @db.Uuid
+  amount_cents        BigInt
+  currency_code       String        @default("USD") @db.VarChar(3)
+  method              PaymentMethod
+  reference           String?       // check number, ACH ref, Stripe charge ID
+  stripe_payment_id   String?       @unique
+  paid_at             DateTime      @db.Timestamptz
+  notes               String?
+  created_at          DateTime      @default(now()) @db.Timestamptz
+  created_by          String?       @db.Uuid
+  deleted_at          DateTime?     @db.Timestamptz
+
+  invoice             Invoice       @relation(fields: [invoice_id], references: [id])
+
+  @@index([invoice_id])
+  @@index([org_id])
+  @@map("payments")
+}
+
+model CreditMemo {
+  id                  String    @id @default(uuid()) @db.Uuid
+  org_id              String    @db.Uuid
+  memo_number         String
+  invoice_id          String?   @db.Uuid
+  customer_id         String    @db.Uuid
+  amount_cents        BigInt
+  currency_code       String    @default("USD") @db.VarChar(3)
+  reason              String?
+  applied_at          DateTime? @db.Timestamptz
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+  created_by          String?   @db.Uuid
+  deleted_at          DateTime? @db.Timestamptz
+
+  invoice             Invoice?  @relation(fields: [invoice_id], references: [id])
+
+  @@unique([org_id, memo_number])
+  @@index([org_id])
+  @@map("credit_memos")
+}
+
+model ReturnAuthorization {
+  id                  String      @id @default(uuid()) @db.Uuid
+  org_id              String      @db.Uuid
+  rma_number          String
+  so_id               String      @db.Uuid
+  customer_id         String      @db.Uuid
+  status              RMAStatus   @default(PENDING)
+  reason              String?
+  notes               String?
+  received_at         DateTime?   @db.Timestamptz
+  created_at          DateTime    @default(now()) @db.Timestamptz
+  updated_at          DateTime    @updatedAt @db.Timestamptz
+  created_by          String?     @db.Uuid
+  deleted_at          DateTime?   @db.Timestamptz
+
+  org                 Organization @relation(fields: [org_id], references: [id])
+  so                  SalesOrder   @relation(fields: [so_id], references: [id])
+  customer            Customer     @relation(fields: [customer_id], references: [id])
+  lines               ReturnLine[]
+
+  @@unique([org_id, rma_number])
+  @@index([org_id])
+  @@map("return_authorizations")
+}
+
+model ReturnLine {
+  id                  String              @id @default(uuid()) @db.Uuid
+  rma_id              String              @db.Uuid
+  so_line_id          String              @db.Uuid
+  quantity            Decimal             @db.Decimal(18, 4)
+  condition           ReturnCondition
+  disposition         ReturnDisposition
+  restock_warehouse_id String?            @db.Uuid
+  notes               String?
+  created_at          DateTime            @default(now()) @db.Timestamptz
+
+  rma                 ReturnAuthorization @relation(fields: [rma_id], references: [id])
+  so_line             SalesOrderLine      @relation(fields: [so_line_id], references: [id])
+
+  @@index([rma_id])
+  @@map("return_lines")
+}
+
+// ============================================================
+// MANUFACTURING
+// ============================================================
+
+model BillOfMaterials {
+  id                  String    @id @default(uuid()) @db.Uuid
+  org_id              String    @db.Uuid
+  product_id          String    @db.Uuid // finished good
+  name                String
+  description         String?
+  active_version_id   String?   @db.Uuid
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+  created_by          String?   @db.Uuid
+  deleted_at          DateTime? @db.Timestamptz
+
+  org                 Organization  @relation(fields: [org_id], references: [id])
+  product             Product       @relation(fields: [product_id], references: [id])
+  versions            BOMVersion[]
+
+  @@index([org_id])
+  @@index([product_id])
+  @@map("bills_of_materials")
+}
+
+model BOMVersion {
+  id                  String    @id @default(uuid()) @db.Uuid
+  bom_id              String    @db.Uuid
+  org_id              String    @db.Uuid
+  version_number      Int
+  is_active           Boolean   @default(false)
+  notes               String?
+  standard_cost_cents BigInt    @default(0) // calculated from lines
+  currency_code       String    @default("USD") @db.VarChar(3)
+  activated_at        DateTime? @db.Timestamptz
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+
+  bom                 BillOfMaterials @relation(fields: [bom_id], references: [id])
+  lines               BOMLine[]
+  work_orders         WorkOrder[]
+  standard_costs      ProductStandardCost[]
+
+  @@unique([bom_id, version_number])
+  @@index([bom_id])
+  @@map("bom_versions")
+}
+
+model BOMLine {
+  id                  String    @id @default(uuid()) @db.Uuid
+  bom_version_id      String    @db.Uuid
+  org_id              String    @db.Uuid
+  component_id        String    @db.Uuid // component product
+  quantity            Decimal   @db.Decimal(18, 6)
+  uom_id              String    @db.Uuid
+  scrap_pct           Decimal   @db.Decimal(5, 2) @default(0)
+  substitute_id       String?   @db.Uuid // alternative component
+  is_phantom          Boolean   @default(false) // for multi-level BOM sub-assemblies
+  notes               String?
+  sort_order          Int       @default(0)
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+
+  bom_version         BOMVersion @relation(fields: [bom_version_id], references: [id])
+  component           Product    @relation(fields: [component_id], references: [id])
+  uom                 UnitOfMeasure @relation(fields: [uom_id], references: [id])
+  substitute          Product?   @relation("SubstituteComponent", fields: [substitute_id], references: [id])
+  wo_material_lines   WorkOrderMaterialLine[]
+
+  @@index([bom_version_id])
+  @@index([component_id])
+  @@map("bom_lines")
+}
+
+model WorkOrder {
+  id                    String        @id @default(uuid()) @db.Uuid
+  org_id                String        @db.Uuid
+  wo_number             String
+  product_id            String        @db.Uuid // finished good
+  bom_version_id        String        @db.Uuid
+  warehouse_id          String        @db.Uuid
+  status                WOStatus      @default(DRAFT)
+  quantity_planned      Decimal       @db.Decimal(18, 4)
+  quantity_produced     Decimal       @db.Decimal(18, 4) @default(0)
+  quantity_scrapped     Decimal       @db.Decimal(18, 4) @default(0)
+  currency_code         String        @default("USD") @db.VarChar(3)
+  planned_cost_cents    BigInt        @default(0) // from BOM standard cost
+  actual_cost_cents     BigInt        @default(0) // actual materials + labor
+  scheduled_start       DateTime?     @db.Timestamptz
+  scheduled_end         DateTime?     @db.Timestamptz
+  actual_start          DateTime?     @db.Timestamptz
+  actual_end            DateTime?     @db.Timestamptz
+  notes                 String?
+  qc_passed             Boolean?
+  qc_notes              String?
+  created_at            DateTime      @default(now()) @db.Timestamptz
+  updated_at            DateTime      @updatedAt @db.Timestamptz
+  created_by            String?       @db.Uuid
+  updated_by            String?       @db.Uuid
+  deleted_at            DateTime?     @db.Timestamptz
+
+  org                   Organization  @relation(fields: [org_id], references: [id])
+  product               Product       @relation(fields: [product_id], references: [id])
+  bom_version           BOMVersion    @relation(fields: [bom_version_id], references: [id])
+  material_lines        WorkOrderMaterialLine[]
+  labor_entries         WorkOrderLaborEntry[]
+  scrap_entries         WorkOrderScrapEntry[]
+
+  @@unique([org_id, wo_number])
+  @@index([org_id])
+  @@index([org_id, status])
+  @@map("work_orders")
+}
+
+model WorkOrderMaterialLine {
+  id                    String    @id @default(uuid()) @db.Uuid
+  wo_id                 String    @db.Uuid
+  bom_line_id           String    @db.Uuid
+  quantity_planned      Decimal   @db.Decimal(18, 4)
+  quantity_consumed     Decimal   @db.Decimal(18, 4) @default(0)
+  uom_id                String    @db.Uuid
+  lot_id                String?   @db.Uuid
+  created_at            DateTime  @default(now()) @db.Timestamptz
+  updated_at            DateTime  @updatedAt @db.Timestamptz
+
+  wo                    WorkOrder @relation(fields: [wo_id], references: [id])
+  bom_line              BOMLine   @relation(fields: [bom_line_id], references: [id])
+
+  @@index([wo_id])
+  @@map("work_order_material_lines")
+}
+
+model WorkOrderLaborEntry {
+  id              String    @id @default(uuid()) @db.Uuid
+  wo_id           String    @db.Uuid
+  org_id          String    @db.Uuid
+  hours           Decimal   @db.Decimal(8, 2)
+  rate_cents      BigInt    // hourly rate in cents
+  total_cents     BigInt
+  currency_code   String    @default("USD") @db.VarChar(3)
+  recorded_by     String    @db.Uuid
+  recorded_at     DateTime  @db.Timestamptz
+  notes           String?
+  created_at      DateTime  @default(now()) @db.Timestamptz
+
+  wo              WorkOrder @relation(fields: [wo_id], references: [id])
+
+  @@index([wo_id])
+  @@map("work_order_labor_entries")
+}
+
+model WorkOrderScrapEntry {
+  id              String    @id @default(uuid()) @db.Uuid
+  wo_id           String    @db.Uuid
+  org_id          String    @db.Uuid
+  quantity        Decimal   @db.Decimal(18, 4)
+  reason_code     String
+  disposition     ScrapDisposition
+  notes           String?
+  created_at      DateTime  @default(now()) @db.Timestamptz
+  created_by      String    @db.Uuid
+
+  wo              WorkOrder @relation(fields: [wo_id], references: [id])
+
+  @@index([wo_id])
+  @@map("work_order_scrap_entries")
+}
+
+// ============================================================
+// COSTING
+// ============================================================
+
+model OverheadAllocationRule {
+  id              String              @id @default(uuid()) @db.Uuid
+  org_id          String              @unique @db.Uuid
+  method          OverheadMethod
+  pct_of_material Decimal?            @db.Decimal(5, 2)  // if method = PCT_OF_MATERIAL
+  per_unit_cents  BigInt?             // if method = PER_UNIT
+  per_hour_cents  BigInt?             // if method = PER_LABOR_HOUR
+  currency_code   String              @default("USD") @db.VarChar(3)
+  updated_at      DateTime            @updatedAt @db.Timestamptz
+
+  org             Organization        @relation(fields: [org_id], references: [id])
+
+  @@map("overhead_allocation_rules")
+}
+
+model ProductStandardCost {
+  id                    String    @id @default(uuid()) @db.Uuid
+  org_id                String    @db.Uuid
+  product_id            String    @db.Uuid
+  bom_version_id        String?   @db.Uuid
+  material_cost_cents   BigInt    @default(0)
+  labor_cost_cents      BigInt    @default(0)
+  overhead_cost_cents   BigInt    @default(0)
+  total_cost_cents      BigInt    @default(0)
+  currency_code         String    @default("USD") @db.VarChar(3)
+  effective_from        DateTime  @db.Timestamptz
+  effective_to          DateTime? @db.Timestamptz
+  created_at            DateTime  @default(now()) @db.Timestamptz
+
+  org                   Organization @relation(fields: [org_id], references: [id])
+  product               Product      @relation(fields: [product_id], references: [id])
+  bom_version           BOMVersion?  @relation(fields: [bom_version_id], references: [id])
+
+  @@index([org_id, product_id, effective_from])
+  @@map("product_standard_costs")
+}
+
+// ============================================================
+// FINANCIALS
+// ============================================================
+
+model TaxSettings {
+  id                  String    @id @default(uuid()) @db.Uuid
+  org_id              String    @unique @db.Uuid
+  collect_sales_tax   Boolean   @default(false)
+  nexus_states        String[]  @db.Char(2)
+  default_tax_rate    Decimal   @db.Decimal(5, 4) @default(0) // e.g. 0.0825 = 8.25%
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+
+  org                 Organization @relation(fields: [org_id], references: [id])
+
+  @@map("tax_settings")
+}
+
+model ChartOfAccount {
+  id              String          @id @default(uuid()) @db.Uuid
+  org_id          String          @db.Uuid
+  code            String
+  name            String
+  type            AccountType
+  subtype         String?
+  is_system       Boolean         @default(false) // system accounts cannot be deleted
+  parent_id       String?         @db.Uuid
+  created_at      DateTime        @default(now()) @db.Timestamptz
+  updated_at      DateTime        @updatedAt @db.Timestamptz
+  deleted_at      DateTime?       @db.Timestamptz
+
+  org             Organization    @relation(fields: [org_id], references: [id])
+  parent          ChartOfAccount? @relation("AccountTree", fields: [parent_id], references: [id])
+  children        ChartOfAccount[] @relation("AccountTree")
+  journal_lines   JournalEntryLine[]
+
+  @@unique([org_id, code])
+  @@index([org_id])
+  @@map("chart_of_accounts")
+}
+
+model JournalEntry {
+  id              String    @id @default(uuid()) @db.Uuid
+  org_id          String    @db.Uuid
+  entry_number    String
+  date            DateTime  @db.Timestamptz
+  description     String
+  reference_type  String?
+  reference_id    String?   @db.Uuid
+  currency_code   String    @default("USD") @db.VarChar(3)
+  posted_at       DateTime? @db.Timestamptz
+  posted_by       String?   @db.Uuid
+  created_at      DateTime  @default(now()) @db.Timestamptz
+
+  org             Organization       @relation(fields: [org_id], references: [id])
+  lines           JournalEntryLine[]
+
+  @@unique([org_id, entry_number])
+  @@index([org_id])
+  @@index([reference_type, reference_id])
+  @@map("journal_entries")
+}
+
+model JournalEntryLine {
+  id              String    @id @default(uuid()) @db.Uuid
+  journal_id      String    @db.Uuid
+  account_id      String    @db.Uuid
+  debit_cents     BigInt    @default(0)
+  credit_cents    BigInt    @default(0)
+  currency_code   String    @default("USD") @db.VarChar(3)
+  description     String?
+
+  journal         JournalEntry   @relation(fields: [journal_id], references: [id])
+  account         ChartOfAccount @relation(fields: [account_id], references: [id])
+
+  @@index([journal_id])
+  @@map("journal_entry_lines")
+}
+
+model ExpenseCategory {
+  id              String    @id @default(uuid()) @db.Uuid
+  org_id          String    @db.Uuid
+  name            String
+  description     String?
+  account_id      String?   @db.Uuid // maps to ChartOfAccount
+  is_overhead     Boolean   @default(false)
+  created_at      DateTime  @default(now()) @db.Timestamptz
+  updated_at      DateTime  @updatedAt @db.Timestamptz
+  deleted_at      DateTime? @db.Timestamptz
+
+  org             Organization @relation(fields: [org_id], references: [id])
+  expenses        Expense[]
+
+  @@index([org_id])
+  @@map("expense_categories")
+}
+
+model Expense {
+  id                  String            @id @default(uuid()) @db.Uuid
+  org_id              String            @db.Uuid
+  category_id         String            @db.Uuid
+  description         String
+  amount_cents        BigInt
+  currency_code       String            @default("USD") @db.VarChar(3)
+  expense_date        DateTime          @db.Timestamptz
+  recurrence          ExpenseRecurrence @default(ONE_TIME)
+  attachment_key      String?           // R2 storage key
+  attachment_name     String?           // original filename for display
+  is_overhead         Boolean           @default(false)
+  notes               String?
+  created_at          DateTime          @default(now()) @db.Timestamptz
+  updated_at          DateTime          @updatedAt @db.Timestamptz
+  created_by          String?           @db.Uuid
+  deleted_at          DateTime?         @db.Timestamptz
+
+  org                 Organization      @relation(fields: [org_id], references: [id])
+  category            ExpenseCategory   @relation(fields: [category_id], references: [id])
+
+  @@index([org_id])
+  @@index([org_id, expense_date])
+  @@map("expenses")
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+model Notification {
+  id              String              @id @default(uuid()) @db.Uuid
+  org_id          String              @db.Uuid
+  user_id         String              @db.Uuid
+  type            NotificationType
+  severity        NotificationSeverity
+  title           String
+  body            String
+  reference_type  String?
+  reference_id    String?             @db.Uuid
+  is_read         Boolean             @default(false)
+  read_at         DateTime?           @db.Timestamptz
+  created_at      DateTime            @default(now()) @db.Timestamptz
+
+  org             Organization        @relation(fields: [org_id], references: [id])
+
+  @@index([org_id, user_id, is_read])
+  @@index([org_id, user_id, created_at])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id                  String              @id @default(uuid()) @db.Uuid
+  user_id             String              @db.Uuid
+  notification_type   NotificationType
+  in_app              Boolean             @default(true)
+  email               Boolean             @default(true)
+  updated_at          DateTime            @updatedAt @db.Timestamptz
+
+  user                User                @relation(fields: [user_id], references: [id])
+
+  @@unique([user_id, notification_type])
+  @@map("notification_preferences")
+}
+
+// ============================================================
+// IMPORTS & AUDIT
+// ============================================================
+
+model ImportBatch {
+  id                  String      @id @default(uuid()) @db.Uuid
+  org_id              String      @db.Uuid
+  entity_type         ImportEntity
+  status              ImportStatus @default(PENDING)
+  original_filename   String
+  storage_key         String      // R2 key for original CSV
+  error_report_key    String?     // R2 key for error report CSV
+  total_rows          Int         @default(0)
+  valid_rows          Int         @default(0)
+  error_rows          Int         @default(0)
+  imported_rows       Int         @default(0)
+  rollback_expires_at DateTime?   @db.Timestamptz
+  rolled_back_at      DateTime?   @db.Timestamptz
+  created_at          DateTime    @default(now()) @db.Timestamptz
+  updated_at          DateTime    @updatedAt @db.Timestamptz
+  created_by          String      @db.Uuid
+
+  org                 Organization @relation(fields: [org_id], references: [id])
+
+  @@index([org_id])
+  @@map("import_batches")
+}
+
+model AuditLog {
+  id              String      @id @default(uuid()) @db.Uuid
+  org_id          String      @db.Uuid
+  user_id         String?     @db.Uuid
+  action          AuditAction
+  entity_type     String
+  entity_id       String      @db.Uuid
+  before_state    Json?
+  after_state     Json?
+  ip_address      String?
+  user_agent      String?
+  created_at      DateTime    @default(now()) @db.Timestamptz
+
+  org             Organization @relation(fields: [org_id], references: [id])
+
+  @@index([org_id])
+  @@index([org_id, entity_type, entity_id])
+  @@index([org_id, user_id])
+  @@index([created_at])
+  @@map("audit_logs")
+}
+
+// ============================================================
+// DOCUMENT SEQUENCES
+// ============================================================
+
+model DocumentSequence {
+  id              String    @id @default(uuid()) @db.Uuid
+  org_id          String    @db.Uuid
+  document_type   String    // PO, SO, QUOTE, INVOICE, WO, RMA, RECEIPT, CREDIT_MEMO
+  prefix          String    // e.g. "INV-", "PO-"
+  next_number     Int       @default(1)
+  zero_pad_length Int       @default(5)
+  updated_at      DateTime  @updatedAt @db.Timestamptz
+
+  @@unique([org_id, document_type])
+  @@index([org_id])
+  @@map("document_sequences")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum CostingMethod {
+  FIFO
+  WEIGHTED_AVERAGE
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MANAGER
+  ACCOUNTANT
+  PURCHASING_STAFF
+  WAREHOUSE_STAFF
+  PRODUCTION_STAFF
+  SALES_STAFF
+  VIEWER
+}
+
+enum SubscriptionPlan {
+  STARTER
+  GROWTH
+  BUSINESS
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  PAUSED
+  CANCELLED
+}
+
+enum UOMType {
+  EACH
+  WEIGHT
+  VOLUME
+  LENGTH
+  AREA
+  TIME
+  CUSTOM
+}
+
+enum ProductType {
+  RAW_MATERIAL
+  COMPONENT
+  SUPPLY
+  WIP
+  FINISHED_GOOD
+}
+
+enum BarcodeType {
+  UPC_A
+  UPC_E
+  EAN_13
+  EAN_8
+  CODE_128
+  CODE_39
+  QR_CODE
+  INTERNAL
+}
+
+enum MovementType {
+  PURCHASE_RECEIPT
+  PURCHASE_RETURN
+  SALES_SHIPMENT
+  SALES_RETURN
+  PRODUCTION_CONSUMPTION
+  PRODUCTION_OUTPUT
+  INVENTORY_ADJUSTMENT
+  INVENTORY_TRANSFER
+  OPENING_BALANCE
+  DAMAGED
+  EXPIRED
+  CYCLE_COUNT
+  ASSEMBLY_CONSUMPTION
+  ASSEMBLY_OUTPUT
+}
+
+enum ReferenceType {
+  PURCHASE_ORDER
+  RECEIPT
+  SALES_ORDER
+  SHIPMENT
+  WORK_ORDER
+  INVENTORY_ADJUSTMENT
+  INVENTORY_TRANSFER
+  IMPORT_BATCH
+  MANUAL
+}
+
+enum SerialNumberStatus {
+  IN_STOCK
+  SOLD
+  RETURNED
+  SCRAPPED
+}
+
+enum POStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  SENT
+  PARTIALLY_RECEIVED
+  FULLY_RECEIVED
+  CLOSED
+  CANCELLED
+}
+
+enum PaymentTerms {
+  COD
+  NET15
+  NET30
+  NET60
+  NET90
+  PREPAID
+}
+
+enum LandedCostType {
+  FREIGHT
+  DUTY
+  INSURANCE
+  HANDLING
+  OTHER
+}
+
+enum CustomerType {
+  RETAIL
+  WHOLESALE
+  DIRECT
+  INTERNAL
+}
+
+enum AddressType {
+  BILLING
+  SHIPPING
+}
+
+enum PriceRuleType {
+  FLAT
+  MARKUP_OVER_COST
+  DISCOUNT_OFF_LIST
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CONVERTED
+}
+
+enum SOStatus {
+  DRAFT
+  CONFIRMED
+  PARTIALLY_FULFILLED
+  FULFILLED
+  CANCELLED
+}
+
+enum FulfillmentStatus {
+  UNFULFILLED
+  PARTIALLY_FULFILLED
+  FULFILLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  VOID
+}
+
+enum PaymentMethod {
+  CASH
+  CHECK
+  ACH
+  WIRE
+  CREDIT_CARD
+  STRIPE
+  OTHER
+}
+
+enum RMAStatus {
+  PENDING
+  APPROVED
+  RECEIVED
+  COMPLETED
+  CANCELLED
+}
+
+enum ReturnCondition {
+  SELLABLE
+  DAMAGED
+  DEFECTIVE
+}
+
+enum ReturnDisposition {
+  RESTOCK
+  WRITE_OFF
+  RETURN_TO_VENDOR
+  SCRAP
+}
+
+enum WOStatus {
+  DRAFT
+  RELEASED
+  IN_PROGRESS
+  COMPLETED
+  CLOSED
+  CANCELLED
+}
+
+enum ScrapDisposition {
+  SCRAP
+  REWORK
+  RETURN_TO_VENDOR
+}
+
+enum OverheadMethod {
+  PCT_OF_MATERIAL
+  PER_UNIT
+  PER_LABOR_HOUR
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  COGS
+  EXPENSE
+}
+
+enum ExpenseRecurrence {
+  ONE_TIME
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  ANNUALLY
+}
+
+enum NotificationType {
+  INVENTORY_BELOW_REORDER
+  INVENTORY_AT_SAFETY_STOCK
+  LOT_EXPIRY_APPROACHING
+  PO_OVERDUE
+  INVOICE_OVERDUE
+  WORK_ORDER_DELAYED
+  COST_THRESHOLD_EXCEEDED
+  NEW_USER_JOINED
+  SUBSCRIPTION_PAYMENT_FAILED
+  IMPORT_COMPLETED
+}
+
+enum NotificationSeverity {
+  INFO
+  WARNING
+  ALERT
+  CRITICAL
+}
+
+enum ImportEntity {
+  PRODUCTS
+  RAW_MATERIALS
+  VENDORS
+  CUSTOMERS
+  OPENING_INVENTORY
+}
+
+enum ImportStatus {
+  PENDING
+  VALIDATING
+  PREVIEW_READY
+  PROCESSING
+  COMPLETED
+  FAILED
+  ROLLED_BACK
+}
+
+enum AuditAction {
+  CREATED
+  UPDATED
+  DELETED
+  RESTORED
+  APPROVED
+  REJECTED
+  SENT
+  POSTED
+  VOIDED
+  CANCELLED
+}

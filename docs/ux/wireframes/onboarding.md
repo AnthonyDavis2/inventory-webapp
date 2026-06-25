@@ -1,67 +1,85 @@
-# Onboarding Wizard Wireframes
+# Onboarding Wireframes
+
+Design notes: Clean, centered layout. White card on gray-50 background. Progress shown as a step indicator, not a progress bar. Each step is focused — one task, minimal fields visible at once. Feels more like Stripe Atlas onboarding than a legacy ERP wizard.
 
 ---
 
-## Step Progress Bar (persistent across all steps)
+## Shell (persistent across all steps)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                                                                         │
-│   ●───●───●───○───○───○───○                                            │
-│   1   2   3   4   5   6   7                                            │
-│  Org UOM  WH  Tax Cost CoA Team                                        │
-│                                                                         │
-│   Step 3 of 7 — Warehouse Setup                                        │
-└─────────────────────────────────────────────────────────────────────────┘
+│  [Logo]                                              Need help?  Contact │
+├──────────────────────────────────��──────────────────────────────────────┤
+│                         bg-gray-50                                       │
+│                                                                          │
+│              ┌──────────────────────────────────────────┐               │
+│              │              bg-white  rounded-xl         │               │
+│              │              border border-gray-200       │               │
+│              │              p-8  max-w-lg                │               │
+│              │                                          │               │
+│              │  [STEP CONTENT — see below]              │               │
+│              │                                          │               │
+│              └──────────────────────────────────────────┘               │
+��                                                                          │
+│         Step 2 of 7  ●●○○○○○  Units of Measure                         │
+│         text-gray-400 text-xs  centered below card                      │
+└───────────────────────────────────────────────���─────────────────────────┘
 ```
+
+Step indicator: 7 dots. Filled = complete (bg-indigo-600), Current = filled (bg-indigo-600) with subtle ring, Future = empty (bg-gray-200).
 
 ---
 
 ## Step 1 — Organization Profile
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Let's set up your organization                             │
-│  ─────────────────────────────────────────────────────────  │
-│                                                             │
-│  Company Name *                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ Acme Manufacturing LLC                              │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  Business Email *                                           │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ hello@acmemfg.com                                   │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  Phone                                                      │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ (555) 000-0000                                      │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  Address Line 1                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ 123 Industrial Blvd                                 │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  City          State    ZIP                                 │
-│  ┌──────────┐  ┌──────┐ ┌──────────┐                       │
-│  │ Dallas   │  │  TX  │ │  75201   │                       │
-│  └──────────┘  └──────┘ └──────────┘                       │
-│                                                             │
-│  Timezone                    Fiscal Year Start              │
-│  ┌──────────────────────┐   ┌──────────────────────┐       │
-│  │ America/Chicago   ▾  │   │ January (Month 1)  ▾ │       │
-│  └──────────────────────┘   └──────────────────────┘       │
-│                                                             │
-│  Company Logo                                               │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  📎  Upload logo (PNG, JPG — max 5MB)              │   │
-│  │      Used on invoices, POs, and packing slips      │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│                        [Continue →]                         │
-└─────────────────────────────────────────────────────────────┘
+┌──���───────────────────────────────────────────────────┐
+│                                                      │
+│  Set up your organization                            │
+│  text-2xl font-semibold text-gray-950                │
+│                                                      │
+│  This appears on your invoices and purchase orders.  │
+│  text-sm text-gray-500  mt-1                         │
+│                                                      │
+│  ────���─────────────────────────────────────────────  │
+│                                                      │
+│  Company name                                        │
+│  ┌─────────────────���──────────────────────────────┐  │
+│  │ Acme Manufacturing LLC                         │  │
+│  └───────────────��────────────────────────────────┘  │
+│                                                      │
+│  Business email                                      │
+│  ┌────────────────────────────────────────────────┐  │
+│  │ hello@acmemfg.com                              │  │
+│  └────────────────────────────────────────────────┘  │
+│                                                      │
+│  Address                                             │
+│  ┌─────��─────────────────────────────────────���────┐  │
+│  │ 123 Industrial Blvd                            │  │
+│  └─────────────────────────────────────────────��──┘  │
+│                                                      │
+│  ┌──────────────────┐  ┌──────┐  ┌─────────────┐    │
+│  │ Dallas           │  │  TX  │  │    75201    │    │
+│  ��� City             │  │ St.  │  │     ZIP     │    ��
+│  └──────────────────┘  └──────┘  └─────────────┘    │
+│                                                      │
+│  ┌─��────────────────────────┐  ┌──────���───────────┐  │
+│  │ America/Chicago        ▾ │  │ January (Jan 1) ▾│  │
+│  │ Timezone                 │  │ Fiscal year start│  │
+│  └─────────────────────────���┘  └──────────────────┘  ���
+│                                                      │
+│  Logo  (used on invoices & POs)                      │
+│  ┌─────���─────────────────────────────────────���────┐  │
+│  │                                                │  │
+│  │    ↑  Drop your logo here or browse            │  │
+│  │       PNG or JPG · max 5 MB                    │  │
+│  │                                                │  │
+│  └────────────────────────────────────���───────────┘  │
+│                                                      │
+│                          [Continue  →]               │
+│                          bg-indigo-600 rounded-lg    │
+│                          w-full  py-2.5              │
+└──────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -69,40 +87,45 @@
 ## Step 2 — Units of Measure
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Select your units of measure                               │
-│  ─────────────────────────────────────────────────────────  │
-│  Choose the units you'll use. You can add more later.       │
-│                                                             │
-│  WEIGHT                                                     │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │  ☑ lb (pound)    ☑ oz (ounce)   ☐ kg    ☐ g         │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  VOLUME                                                     │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │  ☑ gal    ☑ fl oz    ☐ L    ☐ mL                    │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  COUNT / PACKAGING                                          │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │  ☑ each    ☑ dozen    ☑ case    ☑ box    ☐ pallet   │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  LENGTH                                                     │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │  ☐ ft    ☐ in    ☐ m    ☐ yd                        │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  + Add custom UOM                                           │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │  Name: ________   Abbreviation: ___   Type: [▾]      │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  Default stocking UOM: [each ▾]                             │
-│                                                             │
-│  [← Back]                           [Continue →]            │
-└─────────────────────────────────────────────────────────────┘
+┌───────��──────────────────────��───────────────────────┐
+│                                                      │
+│  Which units do you work with?                       │
+│                                                      │
+│  Select the units you'll use for products,           │
+│  purchasing, and manufacturing.                      │
+│                                                      ���
+│  ───────────────────────────────────���──────────────  │
+│                                                      │
+│  Weight                                              │
+│  text-xs font-medium text-gray-500 uppercase         │
+│                                                      │
+│  ┌────────────┐  ┌──────���─────┐  ┌────────────┐     │
+│  │ ✓  lb      │  │ ✓  oz      │  │    kg      │     │
+│  │ pound      │  │ ounce      │  │ kilogram   │     │
+│  └────────────┘  └───────────��┘  └────────────���     │
+│                                                      │
+│  Selected = border-indigo-500 bg-indigo-50           │
+│  Unselected = border-gray-200 bg-white               │
+│  All cards: rounded-lg p-3 text-sm cursor-pointer    ���
+│                                                      │
+│  Volume                                              │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐     │
+│  │ ✓  gal     │  │ ✓  fl oz   │  │    L       │     │
+│  └────────────┘  ��────────────┘  └────��───────┘     │
+│                                                      │
+│  Count & Packaging                                   │
+│  ┌─────��──────┐  ┌────────────┐  ┌────────────┐     │
+│  │ ✓  each    │  │ ✓  case    │  │ ✓  box     │     │
+��  └─────────���──┘  └────────────┘  └─���──────────┘     │
+│                                                      │
+│  + Add a custom unit                                 │
+│  text-indigo-600 text-sm  (expands inline form)      │
+│                                                      │
+│  ────��─────────────────────────────────────────────  │
+│                                                      │
+│  ← Back                          [Continue  →]       │
+│  text-gray-500 text-sm           bg-indigo-600       │
+└──────────────────────────────────────────────────���───┘
 ```
 
 ---
@@ -110,35 +133,41 @@
 ## Step 3 — Warehouse Setup
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Set up your warehouse                                      │
-│  ─────────────────────────────────────────────────────────  │
-│  You need at least one warehouse to track inventory.        │
-│                                                             │
-│  Warehouse Name *                                           │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ Main Warehouse                                      │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  Warehouse Code *                                           │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ MAIN                                                │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  Address (optional)                                         │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ Same as organization address            [Copy ↑]    │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐ │
-│  │  ☐ Enable bin locations                              │ │
-│  │     Track inventory at aisle / rack / shelf level    │ │
-│  │     (You can enable this later, but it can't be     │ │
-│  │      disabled once inventory has been received)     │ │
-│  └───────────────────────────────────────────────────────┘ │
-│                                                             │
-│  [← Back]                           [Continue →]            │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────���──────────────────────────────┐
+│                                                      │
+│  Set up your first warehouse                         │
+│                                                      │
+│  You can add more warehouses later.                  │
+│                                                      │
+│  ─────────────────────────────���────────────────────  │
+│                                                      │
+│  Warehouse name                                      │
+│  ┌────────────��───────────────────────────────────┐  │
+│  │ Main Warehouse                                 │  │
+│  └─────────────────���──────────────────────────────┘  │
+│                                                      │
+│  Code  (used on documents)                           │
+│  ┌──────────────────────────────────────────���─────┐  │
+│  │ MAIN                                           │  │
+│  └──────────────���────────────────────────────────���┘  │
+│                                                      │
+│  ─��────────────────────────────────────────────────  │
+│                                                      │
+│  ┌───────────────────────────��────────────────────┐  │
+│  │  ○  ●                                          │  │
+│  │                                                │  │
+│  │  Track bin locations                           │  │
+│  │  text-sm font-medium text-gray-900             │  │
+│  │                                                │  │
+│  │  Enables aisle / rack / shelf tracking within  │  │
+│  │  this warehouse. Can't be disabled once you've │  │
+│  │  received inventory.                           │  │
+│  │  text-xs text-gray-500                         │  │
+│  └──────────────��─────────────────────────────���───┘  │
+│  Rounded card with toggle, border-gray-200           │
+│                                                      │
+│  ← Back                          [Continue  →]       │
+└─────────────────���──────────────────────────────────���─┘
 ```
 
 ---
@@ -146,72 +175,74 @@
 ## Step 4 — Tax Settings
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Configure tax collection                                   │
-│  ─────────────────────────────────────────────────────────  │
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐ │
-│  │  ○ I don't collect sales tax                         │ │
-│  │    (e.g. B2B wholesale with resale certificates)     │ │
-│  │                                                      │ │
-│  │  ● I collect sales tax                               │ │
-│  └───────────────────────────────────────────────────────┘ │
-│                                                             │
-│  [if "I collect sales tax" selected:]                       │
-│                                                             │
-│  Tax Rate (default)                                         │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ 8.25  %                                             │   │
-│  └─────────────────────────────────────────────────────┘   │
-│  ℹ️  You can configure per-customer exemptions later.       │
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐ │
-│  │  ℹ️  Tax API integration (TaxJar/Avalara) is          │ │
-│  │     available in Phase 2. For now, set a default     │ │
-│  │     rate and override per customer or order.         │ │
-│  └───────────────────────────────────────────────────────┘ │
-│                                                             │
-│  [← Back]                           [Continue →]            │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────��───────────────────────────┐
+│                                                      │
+│  Do you collect sales tax?                           │
+│                                                      │
+│  ────────────────────���─────────────────────���───────  │
+│                                                      │
+│  ┌────────────────────────────────────────────────┐  │
+│  │  No — I sell B2B with resale certificates      │  │
+│  │                                                │  │
+│  │  Most wholesalers and manufacturers fall here. │  │
+│  │  text-xs text-gray-500                         │  │
+│  └─────────────────────────────────────────────��──┘  │
+│                                                      │
+│  ���─────────────────���──────────────────────────────┐  │
+��  │  ✓  Yes — I charge sales tax to customers      │  │
+│  │  Selected: border-indigo-500 bg-indigo-50       │  │
+│  │                                                │  │
+│  │  Default rate                                  │  │
+│  │  ┌────────────────────────────┐                │  ��
+│  │  │ 8.25                    % │                │  │
+│  │  └────────────────────────────┘                │  │
+│  │  You can override per customer or per order.   │  │
+│  └───────────────────────────────────────────────��┘  │
+│                                                      │
+│  ← Back                          [Continue  →]       │
+└─────────────────���─────────────────────────────────��──┘
 ```
 
 ---
 
-## Step 5 — Inventory Costing Method
+## Step 5 — Costing Method
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Choose your inventory costing method                       │
-│  ─────────────────────────────────────────────────────────  │
-│  ⚠️  This cannot be changed after your first inventory      │
-│  transaction. Choose carefully.                             │
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐ │
-│  │  ● FIFO — First In, First Out              [Recommended│ │
-│  │           for manufacturers]                          │ │
-│  │                                                      │ │
-│  │  Each purchase receipt creates a cost layer. When    │ │
-│  │  you sell or consume inventory, the oldest (cheapest)│ │
-│  │  cost layers are used first.                         │ │
-│  │                                                      │ │
-│  │  ✅ Most accurate COGS when material costs change    │ │
-│  │  ✅ Required for lot-tracked, expiring products      │ │
-│  │  ⚠️  More complex — tracks cost per receipt layer    │ │
-│  └───────────────────────────────────────────────────────┘ │
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐ │
-│  │  ○ Weighted Average Cost                              │ │
-│  │                                                      │ │
-│  │  All units of a product share one average cost that  │ │
-│  │  updates each time you receive inventory.            │ │
-│  │                                                      │ │
-│  │  ✅ Simpler to understand                            │ │
-│  │  ✅ Preferred for high-volume, commodity products    │ │
-│  │  ⚠️  COGS smoothed out — doesn't reflect price spikes│ │
-│  └───────────────────────────────────────────────────────┘ │
-│                                                             │
-│  [← Back]                           [Continue →]            │
-└─────────────────────────────────────────────────────────────┘
+┌─────────��────────────────────────────────────────────┐
+│                                                      │
+│  How should we value your inventory?                 │
+│                                                      │
+│  This can't be changed after your first inventory    │
+│  transaction.                                        │
+│  text-sm text-gray-500                               │
+│                                                      │
+│  ─────────────────────────────────────────────────��  │
+│                                                      │
+│  ┌────────────────────────────────────────────────┐  │
+│  │  ✓  FIFO  ·  First In, First Out               │  │
+│  │  Selected: border-indigo-500 bg-indigo-50       │  │
+│  │                                                │  │
+│  │  Each purchase creates a cost layer. Sales use  │  │
+��  │  the oldest costs first.                       │  │
+│  │                                                │  │
+│  │  ✓  Most accurate COGS                         │  │
+│  │  ✓  Best for lot-tracked & expiring products   │  │
+│  │  text-xs text-green-600                        │  │
+│  └──────���────────────────────────────��────────────┘  │
+│                                                      │
+│  ┌────────────────��───────────────────────────���───┐  │
+│  │     Weighted Average Cost                      │  │
+│  │                                                │  │
+│  │  All units share one running average cost that │  │
+│  │  updates on every purchase receipt.            │  │
+│  │                                                │  │
+│  │  ✓  Simpler                                    │  │
+│  │  ✓  Better for high-volume commodity products  │  │
+│  │  text-xs text-green-600                        │  │
+│  └────────────��───────────────────────────────────┘  ���
+│                                                      │
+│  ← Back                          [Continue  →]       │
+└─────────────���────────────────────────────────────────┘
 ```
 
 ---
@@ -219,60 +250,67 @@
 ## Step 6 — Chart of Accounts
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Review your chart of accounts                              │
-│  ─────────────────────────────────────────────────────────  │
-│  Pre-populated with standard US small business accounts.    │
-│  You can rename and add accounts — system accounts are      │
-│  locked.                                                    │
-│                                                             │
-│  ASSETS                                ▾                    │
-│  ┌───────────────────────────────────────────────────────┐ │
-│  │  1000  Cash                           🔒              │ │
-│  │  1100  Accounts Receivable            🔒              │ │
-│  │  1200  Inventory Asset                🔒              │ │
-│  │  1500  Fixed Assets                                   │ │
-│  └───────────────────────────────────────────────────────┘ │
-│                                                             │
-│  LIABILITIES                           ▾                    │
-│  ┌───────────────────────────────────────────────────────┐ │
-│  │  2000  Accounts Payable               🔒              │ │
-│  │  2100  Sales Tax Payable              🔒              │ │
-│  └───────────────────────────────────────────────────────┘ │
-│                                                             │
-│  REVENUE                               ▾                    │
-│  COGS                                  ▾                    │
-│  EXPENSES                              ▾                    │
-│                                                             │
-│  [+ Add Account]                                            │
-│                                                             │
-│  [← Back]                           [Continue →]            │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────��─────────────────────────────────┐
+│                                                      │
+│  Your chart of accounts                              │
+│                                                      │
+│  Pre-set with standard US accounts. Rename or add   │
+│  accounts — system accounts are protected.           │
+��                                                      │
+│  ��─────��───────────────────────────────────────────  │
+│                                                      │
+│  ┌───���──────────────────────────────────────────┐   │
+│  │  Assets                               ∧      │   │
+│  │  ──────────────────────────────────────────  │   │
+│  │  1000  Cash                            🔒    │   │
+│  │  1100  Accounts Receivable             🔒    │   │
+│  │  1200  Inventory Asset                 🔒    │   │
+│  │  1500  Fixed Assets              [Rename]    │   │
+│  └───��─────────────────────────────────��────────┘   │
+│                                                      │
+│  ┌���─────────────────────────────────────────────┐   │
+│  │  Liabilities                          ∨      │   │  ← collapsed
+│  └────────────────��───────────────────────────���─┘   │
+│                                                      │
+│  ┌───────��────────────���─────────────────────────┐   │
+│  │  Revenue                              ∨      │   │
+│  └────────────────��───────────────────────────���─┘   │
+│                                                      │
+│  + Add account   text-indigo-600 text-sm             │
+│                                                      │
+│  ← Back                          [Continue  →]       │
+└────��─────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Step 7 — Invite Team Members
+## Step 7 — Invite Team
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Invite your team  (optional)                               │
-│  ─────────────────────────────────────────────────────────  │
-│  Invitations are valid for 72 hours.                        │
-│                                                             │
-│  Email                              Role                    │
-│  ┌─────────────────────────────┐  ┌──────────────────────┐  │
-│  │ sarah@acmemfg.com           │  │ Warehouse Staff    ▾ │  │
-│  └─────────────────────────────┘  └──────────────────────┘  │
-│                                                             │
-│  ┌─────────────────────────────┐  ┌──────────────────────┐  │
-│  │ tom@acmemfg.com             │  │ Sales Staff        ▾ │  │
-│  └─────────────────────────────┘  └──────────────────────┘  │
-│                                                             │
-│  [+ Add another]                                            │
-│                                                             │
-│  [← Back]          [Skip for now]     [Finish Setup ✓]     │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────��────────────────────────┐
+│                                                      │
+│  Invite your team                                    │
+│                                                      │
+│  Optional — you can do this from Settings later.     │
+│  Invitations expire after 72 hours.                  │
+│                                                      │
+│  ──────��───────────────────────────────────────────  │
+│                                                      │
+│  ┌─��──────────────────────────┐  ┌────────────────┐  │
+│  │ sarah@acmemfg.com          │  │ Warehouse    ▾ │  │
+│  └─────────────���──────────────┘  └─────────���──────┘  │
+│                                                      │
+│  ┌──────────���─────────────────┐  ┌────────────────┐  │
+│  │ tom@acmemfg.com            │  │ Sales Staff  ▾ │  │
+│  └─────��──────────────────────┘  └────────────────┘  ��
+│                                                      │
+│  + Add another person   text-indigo-600 text-sm      │
+│                                                      │
+│  ─────────────────���──────────────────────────��─────  │
+│                                                      │
+│  ← Back   Skip for now            [Finish Setup →]   │
+│           text-gray-400 text-sm   bg-indigo-600      │
+└──────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -280,26 +318,37 @@
 ## Onboarding Complete
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│                       🎉                                    │
-│              You're all set up!                             │
-│                                                             │
-│   Your 14-day free trial is active. No credit card         │
-│   needed until your trial ends on Jul 8, 2026.             │
-│                                                             │
-│   ────────────────────────────────────────────────────      │
-│   What would you like to do first?                          │
-│                                                             │
-│   ┌──────────────────────┐  ┌──────────────────────────┐   │
-│   │  📦 Add products     │  │  📥 Import from CSV      │   │
-│   └──────────────────────┘  └──────────────────────────┘   │
-│                                                             │
-│   ┌──────────────────────┐  ┌──────────────────────────┐   │
-│   │  🏢 Add vendors      │  │  👥 Add customers         │   │
-│   └──────────────────────┘  └──────────────────────────┘   │
-│                                                             │
-│                 [Go to Dashboard →]                         │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+┌─��────────────────────────────────────────────────────┐
+│                                                      │
+│         ✦  You're set up                             │
+│         text-2xl font-semibold  text-center          │
+│                                                      │
+│  Your 14-day free trial is active.                   │
+│  No payment needed until Jul 8, 2026.                │
+│  text-sm text-gray-500  text-center                  ��
+│                                                      │
+│  ──────────────────────────────────────���───────────  │
+│                                                      │
+│  Where would you like to start?                      │
+│  text-xs font-medium text-gray-500 uppercase         │
+│                                                      │
+│  ┌────────────────────────┐  ┌────────────────────┐  │
+│  │  Add products          │  │  Import from CSV   │  │
+│  │  → /app/products/new   │  │  → /app/products/  │  ��
+│  │                        │  │    import          │  │
+│  └─────────────���──────────┘  └────────────────────┘  │
+│  border border-gray-200 rounded-xl p-4 hover:bg-gray-50│
+��                                                      │
+│  ┌────────────���───────────┐  ┌────────────────────┐  │
+���  │  Add vendors           │  │  Add customers     │  │
+│  └─────────────────���──────┘  └────────────────��───┘  │
+│                                                      │
+│  ─────���──────────────────────────────────────────    │
+│  Or just explore the dashboard                       │
+│  text-sm text-gray-500 text-center                   │
+��                                                      │
+│              [Go to Dashboard →]                     │
+│              text-indigo-600 text-sm text-center     │
+│                                                      │
+└──────────────��─────────────────────────────────���─────┘
 ```

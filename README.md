@@ -62,6 +62,7 @@ docs/architecture/system-overview.md
 - [Database Schema](docs/architecture/schema.prisma) — Full Prisma schema (source of truth)
 
 ### UX
+- [Design System](docs/ux/design-system.md) — Color palette, typography, components, patterns
 - [Sitemap](docs/ux/sitemap.md) — All routes and navigation structure
 - [Onboarding Wireframes](docs/ux/wireframes/onboarding.md) — 7-step wizard
 - [Key Module Wireframes](docs/ux/wireframes/key-modules.md) — Dashboard, inventory, PO, SO, invoice, BOM, WO
