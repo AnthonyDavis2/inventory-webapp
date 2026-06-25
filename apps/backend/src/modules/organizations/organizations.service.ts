@@ -238,5 +238,20 @@ export class OrganizationsService {
         is_system: ['1200', '2000', '4000', '5000'].includes(a.code),
       })),
     })
+
+    // Default expense categories
+    await tx.expenseCategory.createMany({
+      data: [
+        { org_id: orgId, name: 'Office Supplies', is_overhead: false },
+        { org_id: orgId, name: 'Travel & Meals', is_overhead: false },
+        { org_id: orgId, name: 'Utilities', is_overhead: true },
+        { org_id: orgId, name: 'Rent', is_overhead: true },
+        { org_id: orgId, name: 'Marketing & Advertising', is_overhead: false },
+        { org_id: orgId, name: 'Shipping & Freight', is_overhead: false },
+        { org_id: orgId, name: 'Professional Services', is_overhead: false },
+        { org_id: orgId, name: 'Equipment & Maintenance', is_overhead: true },
+        { org_id: orgId, name: 'Other', is_overhead: false },
+      ],
+    })
   }
 }

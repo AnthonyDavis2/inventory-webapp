@@ -40,6 +40,10 @@ function buildMockPrisma() {
     user: {
       findFirst: jest.fn(),
     },
+    documentSequence: { createMany: jest.fn() },
+    taxSettings: { create: jest.fn() },
+    chartOfAccount: { createMany: jest.fn() },
+    expenseCategory: { createMany: jest.fn() },
     $transaction: jest.fn(),
   }
 }
@@ -78,6 +82,7 @@ describe('OrganizationsService', () => {
           documentSequence: { createMany: jest.fn().mockResolvedValue({ count: 8 }) },
           taxSettings: { create: jest.fn().mockResolvedValue({}) },
           chartOfAccount: { createMany: jest.fn().mockResolvedValue({ count: 17 }) },
+          expenseCategory: { createMany: jest.fn().mockResolvedValue({ count: 9 }) },
         }
         return fn(tx)
       })

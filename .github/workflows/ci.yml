@@ -181,7 +181,29 @@ jobs:
     environment: staging
     steps:
       - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
       - name: Deploy backend to Railway
-        run: echo "Railway deploy via railway CLI or GitHub integration"
-      - name: Deploy frontend
-        run: echo "Frontend deploy"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          pnpm exec railway up --service=backend --environment=staging --detach
+
+      - name: Deploy frontend to Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          pnpm exec vercel deploy --prod --token=$VERCEL_TOKEN --yes \
+            --build-env NUXT_PUBLIC_API_URL=${{ secrets.STAGING_API_URL }}
