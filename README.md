@@ -48,7 +48,7 @@ docker compose up
 
 **Tab 2 — Backend** (wait for Tab 1 to be ready)
 ```bash
-pnpm --filter backend start:dev
+pnpm --filter backend dev
 ```
 
 **Tab 3 — Frontend** (wait for Tab 2 to show port 3001)
