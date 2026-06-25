@@ -1,4 +1,9 @@
-import { Module } from '@nestjs/common'
+import { Global, Module } from '@nestjs/common'
+import { SearchService } from './search.service'
 
-@Module({})
+@Global()
+@Module({
+  providers: [SearchService],
+  exports: [SearchService],
+})
 export class SearchModule {}
